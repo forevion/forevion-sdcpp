@@ -38,7 +38,22 @@ The first run installs any missing build tools with apt (Git, CMake, Ninja, the
 compiler and curl; it asks for your password), downloads Node.js and pnpm into
 `tools/`, clones the source, builds `sd-server` for this CPU with the Web UI, starts
 it and opens the browser. Later runs check the tools, rebuild only when the source
-changed, and start the server. Everything stays in that folder:
+changed, and start the server.
+
+```mermaid
+flowchart TD
+    A["./setup-sdcpp.sh"] --> B["Check build tools<br/>apt installs any missing"]
+    B --> C["Node.js and pnpm<br/>downloaded into tools/"]
+    C --> D["Get the source<br/>clone, or pull with --update"]
+    D --> E{"Source changed?<br/>or no binary, or --rebuild"}
+    E -- yes --> F["Build sd-server<br/>jobs capped by free RAM"]
+    E -- no --> G{"Server already running?"}
+    F --> G
+    G -- yes --> H["Open the browser"]
+    G -- no --> I["Start sd-server<br/>browser opens when ready"]
+```
+
+Everything stays in that folder:
 
 | Folder | Contents |
 | --- | --- |
