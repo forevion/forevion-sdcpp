@@ -11,7 +11,8 @@
 # By default it downloads the latest ready-built "studio-*" release from GitHub (x86-64,
 # glibc 2.35+), checks its SHA-256 and unpacks it into app/ next to this script. Building
 # from source needs Git, CMake, Ninja and a compiler from apt plus Node.js, which the script
-# downloads next to itself. Models and outputs also stay next to this script.
+# downloads next to itself. On the first start the browser asks where models, inputs and
+# outputs go; the choice is saved in studio-settings.json next to this script.
 set -euo pipefail
 
 REPO_URL="${SDCPP_REPO:-https://github.com/forevion/forevion-sdcpp.git}"
@@ -94,7 +95,7 @@ else
     OUTPUTS="$HOME_DIR/outputs"
     IN_CHECKOUT=0
 fi
-MODELS="$HOME_DIR/models"
+SETTINGS="$HOME_DIR/studio-settings.json"
 APP="$HOME_DIR/app"
 REPO_SLUG="$(sed -E 's#^https://github.com/##; s#\.git$##' <<<"$REPO_URL")"
 
@@ -141,7 +142,7 @@ latest_release_tag() {
 }
 
 install_release() {
-    step "Checking the sd.cpp Studio package"
+    step "Checking the Forevion Studio package"
     require_commands curl=curl tar=tar gzip=gzip sha256sum=coreutils
 
     local installed tag work package
@@ -344,7 +345,13 @@ fi
 
 # ================================================================ start
 
-mkdir -p "$MODELS" "$OUTPUTS"
+# A folder saved by the Web UI in studio-settings.json, e.g. settings_folder models.
+settings_folder() {
+    [[ -f "$SETTINGS" ]] || return 0
+    sed -n "s/.*\"$1_dir\": *\"\([^\"]*\)\".*/\1/p" "$SETTINGS" | head -n 1
+}
+MODELS="$(settings_folder models)"
+OUTPUTS="$(settings_folder outputs)"
 if [[ -z "$THREADS" ]]; then
     THREADS="$( (lscpu -p=Core,Socket 2>/dev/null || true) | grep -v '^#' | sort -u | wc -l)"
     [[ "$THREADS" -gt 0 ]] || THREADS="$(nproc)"
@@ -365,10 +372,15 @@ if curl -fsS -m 2 "$URL/sdcpp/v1/capabilities" >/dev/null 2>&1; then
 fi
 
 ram_gb="$(awk '/MemTotal/ {printf "%d", $2 / 1048576}' /proc/meminfo)"
-free_gb="$(df -Pk "$MODELS" | awk 'NR == 2 {printf "%d", $4 / 1048576}')"
-step "Starting sd.cpp Studio"
-echo "    ${DIM}models:  $MODELS${RESET}"
-echo "    ${DIM}outputs: $OUTPUTS${RESET}"
+free_gb="$(df -Pk "${MODELS:-$HOME_DIR}" 2>/dev/null | awk 'NR == 2 {printf "%d", $4 / 1048576}')"
+free_gb="${free_gb:-0}"
+step "Starting Forevion Studio"
+if [[ -n "$MODELS" ]]; then
+    echo "    ${DIM}models:  $MODELS${RESET}"
+    echo "    ${DIM}outputs: $OUTPUTS${RESET}"
+else
+    echo "    ${DIM}folders: not chosen yet; the browser asks for them first${RESET}"
+fi
 echo "    ${DIM}$THREADS threads, ${ram_gb} GB RAM, ${free_gb} GB free disk${RESET}"
 [[ "$free_gb" -ge 30 ]] || warn "less than 30 GB free; the models need 11-23 GB each"
 echo
@@ -390,5 +402,5 @@ echo
 cd "$HOME_DIR"
 exec "$SERVER_BIN" \
     --listen-ip "$HOST" --listen-port "$PORT" \
-    --model-dir "$MODELS" --output-dir "$OUTPUTS" \
+    --settings-file "$SETTINGS" \
     --mmap --auto-fit off --vae-tiling -t "$THREADS"

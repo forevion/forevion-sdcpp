@@ -101,11 +101,12 @@ jobs:
           git rev-parse --short HEAD | Set-Content "$pkg\VERSION"
           $launcher = @(
             '@echo off'
-            'rem Starts sd.cpp Studio at http://127.0.0.1:1234. Close this window to stop it.'
+            'rem Starts Forevion Studio at http://127.0.0.1:1234. Close this window to stop it.'
+            'rem The first start asks in the browser where models, inputs and outputs go (saved in studio-settings.json).'
             'cd /d "%~dp0"'
             'set /a THREADS=%NUMBER_OF_PROCESSORS% / 2'
             'start "" /min cmd /c "timeout /t 4 /nobreak >nul & start "" http://127.0.0.1:1234"'
-            'sd-server.exe --listen-ip 127.0.0.1 --listen-port 1234 --model-dir models --output-dir outputs --mmap --auto-fit off --vae-tiling -t %THREADS%'
+            'sd-server.exe --listen-ip 127.0.0.1 --listen-port 1234 --settings-file studio-settings.json --mmap --auto-fit off --vae-tiling -t %THREADS%'
             'pause'
           )
           Set-Content "$pkg\start-studio.bat" $launcher -Encoding ascii

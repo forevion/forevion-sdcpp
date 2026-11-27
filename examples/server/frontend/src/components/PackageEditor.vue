@@ -209,7 +209,7 @@ onMounted(async () => {
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     gap: 14px;
     width: min(800px, 100%);
-    max-height: 100%;
+    max-height: calc(100dvh - 40px);
     padding: 20px;
 }
 

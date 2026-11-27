@@ -214,7 +214,7 @@ onMounted(async () => {
                 </template>
 
                 <template v-else>
-                    <div class="done">
+                    <div class="saved-note">
                         <Icon name="check" :size="28" />
                         <h3>{{ name }} is saved</h3>
                         <p class="muted">{{ downloading ? "It becomes ready as soon as its downloads finish." : "It's ready to use." }}</p>
@@ -258,7 +258,7 @@ onMounted(async () => {
     grid-template-rows: auto minmax(0, 1fr) auto auto;
     gap: 14px;
     width: min(760px, 100%);
-    max-height: 100%;
+    max-height: calc(100dvh - 40px);
     padding: 20px;
 }
 
@@ -366,7 +366,7 @@ onMounted(async () => {
     font-size: 12px;
 }
 
-.done {
+.saved-note {
     display: grid;
     justify-items: center;
     gap: 8px;
@@ -375,7 +375,7 @@ onMounted(async () => {
     text-align: center;
 }
 
-.done h3 {
+.saved-note h3 {
     color: var(--text);
 }
 

@@ -32,6 +32,13 @@ struct SDSvrParams {
     std::string catalog_url = "https://raw.githubusercontent.com/forevion/forevion-sdcpp/master/examples/server/downloads.json";
     bool media_view = true;
     std::vector<std::string> model_dirs;
+    // Uploaded start images, references, audio and control frames are kept here; empty disables it.
+    std::string input_dir;
+    // JSON file with the models, inputs and outputs folders chosen in the Web UI. Its folders
+    // replace --model-dir, --input-dir and --output-dir; without it the Web UI cannot save folders.
+    std::string settings_file;
+    // The settings file names all three folders and they exist (otherwise the Web UI asks for them).
+    bool folders_configured = false;
     std::vector<std::string> api_keys;
     std::string api_key_file;
     std::vector<std::string> cors_origins;

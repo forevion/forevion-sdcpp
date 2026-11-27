@@ -217,10 +217,14 @@ export const currentTask = computed(() => tasks.value.find((t) => t.id === state
 export const inputSupport = computed(() => {
     const features = currentRecipe.value?.effective_features || {};
     const task = currentTask.value?.id;
+    // VACE models take one reference picture through the start-image input.
+    const vaceReference = task === "r2v" && Boolean(features.vace) && !features.ref_images;
     return {
-        startFrame: task === "i2v" || task === "s2v" || task === "i2i" || (task === "v2v" && Boolean(features.init_image)),
-        startRequired: task === "i2v" || task === "s2v" || task === "i2i",
-        startLabel: task === "i2i" ? "Image to redraw" : task === "s2v" ? "Portrait (who speaks)" : task === "v2v" ? "Reference image" : "Start frame",
+        startFrame: task === "i2v" || task === "s2v" || task === "i2i" || vaceReference || (task === "v2v" && Boolean(features.init_image)),
+        startRequired: task === "i2v" || task === "s2v" || task === "i2i" || vaceReference,
+        startLabel:
+            task === "i2i" ? "Image to redraw" : task === "s2v" ? "Portrait (who speaks)" : vaceReference ? "Character or object to keep" : task === "v2v" ? "Reference image" : "Start frame",
+        vaceReference,
         endFrame: task === "i2v" && Boolean(features.end_image),
         refImages: (task === "edit" || task === "r2v") && Boolean(features.ref_images),
         audio: task === "s2v" || (task === "r2v" && Boolean(features.ref_audios)),
@@ -237,7 +241,7 @@ export const missingInputs = computed<string[]>(() => {
     const missing: string[] = [];
     if (support.startRequired && !inputs.startImage) missing.push(support.startLabel.toLowerCase());
     if (currentTask.value?.id === "edit" && !inputs.refImages.length) missing.push("at least one image to edit");
-    if (currentTask.value?.id === "r2v" && !inputs.refImages.length && !inputs.audio) missing.push("a reference image or audio clip");
+    if (currentTask.value?.id === "r2v" && !support.vaceReference && !inputs.refImages.length && !inputs.audio) missing.push("a reference image or audio clip");
     if (currentTask.value?.id === "s2v" && !inputs.audio) missing.push("a speech audio clip");
     if (support.control && !inputs.control) missing.push("a control video");
     return missing;
@@ -544,5 +548,54 @@ export function reuse(output: OutputEntry) {
     if (output.width && output.height) {
         const r = output.width / output.height;
         form.aspect = r > 1.5 ? "16:9" : r > 1.1 ? "4:3" : r > 0.9 ? "1:1" : r > 0.65 ? "3:4" : "9:16";
+    }
+    restoreInputs(output, frames > 1);
+}
+
+async function urlToDataUrl(url: string): Promise<{ data: string; bytes: ArrayBuffer }> {
+    const response = await fetch(url);
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    const blob = await response.blob();
+    const bytes = await blob.arrayBuffer();
+    const data = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve(String(reader.result));
+        reader.onerror = () => reject(reader.error);
+        reader.readAsDataURL(blob);
+    });
+    return { data, bytes };
+}
+
+// Puts the inputs a result was made from (kept in the inputs folder) back into the form.
+async function restoreInputs(output: OutputEntry, video: boolean) {
+    const saved = output.inputs || {};
+    const inputs = state.inputs;
+    const name = (url: string) => url.split("/").pop() || "input";
+    inputs.startImage = inputs.startName = inputs.endImage = inputs.endName = "";
+    inputs.refImages = [];
+    inputs.audio = null;
+    inputs.control = null;
+    const form = state.form;
+    if (saved.control_frames?.length) form.task = "v2v";
+    else if (saved.ref_audios?.length && saved.init_image) form.task = "s2v";
+    else if (saved.ref_images?.length || saved.ref_audios?.length) form.task = video ? "r2v" : "edit";
+    else if (saved.init_image) form.task = video ? "i2v" : "i2i";
+    try {
+        if (saved.init_image) [inputs.startImage, inputs.startName] = [(await urlToDataUrl(saved.init_image)).data, name(saved.init_image)];
+        if (saved.end_image) [inputs.endImage, inputs.endName] = [(await urlToDataUrl(saved.end_image)).data, name(saved.end_image)];
+        for (const url of saved.ref_images || []) inputs.refImages.push({ name: name(url), data: (await urlToDataUrl(url)).data });
+        if (saved.ref_audios?.length) {
+            const { data, bytes } = await urlToDataUrl(saved.ref_audios[0]);
+            const view = new DataView(bytes);
+            const byteRate = bytes.byteLength > 44 ? view.getUint32(28, true) : 0;
+            inputs.audio = { name: name(saved.ref_audios[0]), data, seconds: byteRate ? (bytes.byteLength - 44) / byteRate : 0 };
+        }
+        if (saved.control_frames?.length) {
+            const frames: string[] = [];
+            for (const url of saved.control_frames) frames.push((await urlToDataUrl(url)).data);
+            inputs.control = { name: `${frames.length} saved frames`, frames };
+        }
+    } catch (error) {
+        state.error = `Some inputs of this result could not be loaded: ${(error as Error).message}`;
     }
 }

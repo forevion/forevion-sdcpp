@@ -3,6 +3,8 @@ setlocal DisableDelayedExpansion
 
 set "SD_SERVER_PATH=%SD_SERVER_PATH%"
 set "MODEL_DIR=./models"
+rem Models, inputs and outputs folders chosen in the Web UI on first start.
+if not defined SD_SETTINGS_FILE set "SD_SETTINGS_FILE=%~dp0studio-settings.json"
 set "COMMANDLINE_ARGS="
 
 if exist "%~dp0start-server.local.bat" (
@@ -35,8 +37,8 @@ exit /b 1
 
 :run
 if "%~1"=="--version" goto version
-echo Running: "%SD_SERVER_PATH%" --model-dir "%MODEL_DIR%" %COMMANDLINE_ARGS% %*
-"%SD_SERVER_PATH%" --model-dir "%MODEL_DIR%" %COMMANDLINE_ARGS% %*
+echo Running: "%SD_SERVER_PATH%" --model-dir "%MODEL_DIR%" --settings-file "%SD_SETTINGS_FILE%" %COMMANDLINE_ARGS% %*
+"%SD_SERVER_PATH%" --model-dir "%MODEL_DIR%" --settings-file "%SD_SETTINGS_FILE%" %COMMANDLINE_ARGS% %*
 exit /b %errorlevel%
 
 :version

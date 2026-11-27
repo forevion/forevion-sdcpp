@@ -498,6 +498,8 @@ static void submit_generation_job(ServerRuntime& runtime, const httplib::Request
             return;
         }
         job->summary = make_job_summary(*job, requested_model.is_null() ? json::object() : json({{"model", requested_model}}));
+        if (json inputs = save_job_inputs(runtime, body); !inputs.empty())
+            job->summary["inputs"] = std::move(inputs);
         if (model_lock.owns_lock()) {
             job->model_revision = runtime.models->revision;
             job->request_body   = std::move(body);

@@ -38,6 +38,8 @@ import {
     submit,
 } from "../lib/store";
 import type { Aspect } from "../lib/store";
+import { availableTasks, TASK_NOT_IN_SDCPP, TASKS } from "../lib/tasks";
+import type { TaskDef, TaskId } from "../lib/tasks";
 import type { OutputEntry, Recipe } from "../lib/types";
 
 const emit = defineEmits<{ (e: "open-models"): void; (e: "open-gallery"): void }>();
@@ -76,30 +78,57 @@ function clearStart() {
     state.inputs.startName = "";
 }
 
-// Ready presets as cards, plus the current one when it was picked from "Other model" and still needs files.
-const modelCards = computed(() => {
-    const cards = [...readyRecipes.value];
-    if (currentRecipe.value && !cards.some((r) => r.id === currentRecipe.value!.id)) cards.push(currentRecipe.value);
-    return cards;
-});
-const otherModels = computed(() => {
+// One dropdown: ready variants first, then variants with missing files, then model types to set up.
+const modelGroups = computed(() => {
     const ready = new Set(readyRecipes.value.map((r) => r.id));
     const rest = state.recipes.filter((r) => !ready.has(r.id)).sort((a, b) => a.name.localeCompare(b.name));
-    return { mine: rest.filter((r) => r.source === "user"), builtin: rest.filter((r) => r.source !== "user") };
+    return { ready: readyRecipes.value, mine: rest.filter((r) => r.source === "user"), builtin: rest.filter((r) => r.source !== "user") };
 });
+const currentIsReady = computed(() => readyRecipes.value.some((r) => r.id === currentRecipe.value?.id));
+
+function pickModel(event: Event) {
+    const id = (event.target as HTMLSelectElement).value;
+    if (!id) return;
+    form.recipeId = id;
+    blocked.value = "";
+    if (!readyRecipes.value.some((r) => r.id === id)) filesOpen.value = true;
+}
+
+// Every task is shown; ones the chosen model cannot do explain which models can.
+const supported = computed(() => new Set(tasks.value.map((t) => t.id)));
+const blocked = ref<TaskId | "">("");
+const blockedTask = computed(() => TASKS.find((t) => t.id === blocked.value) || null);
+const whoCan = computed(() => {
+    const task = blocked.value;
+    if (!task) return { ready: [] as Recipe[], types: [] as string[] };
+    const can = (r: Recipe) => availableTasks(r).some((t) => t.id === task);
+    return {
+        ready: readyRecipes.value.filter(can),
+        types: state.recipes.filter((r) => r.source !== "user" && can(r)).map((r) => r.name).slice(0, 8),
+    };
+});
+
+function chooseTask(task: TaskDef) {
+    if (supported.value.has(task.id)) {
+        form.task = task.id;
+        blocked.value = "";
+    } else blocked.value = blocked.value === task.id ? "" : task.id;
+}
+
+function switchTo(recipe: Recipe) {
+    const task = blocked.value;
+    form.recipeId = recipe.id;
+    if (task) form.task = task;
+    blocked.value = "";
+}
+
+function taskIcon(task: TaskDef) {
+    return task.output === "image" ? "image" : task.output === "audio" ? "sparkles" : "video";
+}
 
 function filesFor(categories: string[] | undefined) {
     const allowed = new Set(categories || []);
     return state.files.filter((f) => allowed.has(f.category)).sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
-}
-
-function pickOther(event: Event) {
-    const select = event.target as HTMLSelectElement;
-    if (select.value) {
-        form.recipeId = select.value;
-        filesOpen.value = true;
-    }
-    select.value = "";
 }
 
 function onFilesToggle(event: Event) {
@@ -227,50 +256,56 @@ function resetAdvanced() {
 
             <template v-else>
                 <div class="field">
-                    <span>Model</span>
-                    <div class="models">
-                        <button
-                            v-for="recipe in modelCards"
-                            :key="recipe.id"
-                            type="button"
-                            class="model"
-                            :aria-pressed="currentRecipe?.id === recipe.id"
-                            @click="form.recipeId = recipe.id"
-                        >
-                            <strong>{{ recipe.name }}</strong>
-                            <small>{{ recipe.defaults?.steps ?? "?" }} steps · {{ recipe.defaults?.width }}×{{ recipe.defaults?.height }}</small>
-                        </button>
-                    </div>
-                    <div class="model-more">
-                        <select class="input" aria-label="Other model" @change="pickOther">
-                            <option value="">Other model… (pick its files yourself)</option>
-                            <optgroup v-if="otherModels.mine.length" label="Your variants (files missing)">
-                                <option v-for="r in otherModels.mine" :key="r.id" :value="r.id">{{ r.name }}</option>
-                            </optgroup>
-                            <optgroup label="Built-in model types">
-                                <option v-for="r in otherModels.builtin" :key="r.id" :value="r.id">{{ r.name }}</option>
-                            </optgroup>
-                        </select>
-                        <button class="link" type="button" @click="emit('open-models')">Get more models…</button>
-                    </div>
+                    <span class="label-row">Model <button class="link" type="button" @click="emit('open-models')">Get more models…</button></span>
+                    <select class="input model-select" aria-label="Model" :value="currentRecipe?.id || ''" @change="pickModel">
+                        <option v-if="!currentRecipe" value="">Choose a model…</option>
+                        <optgroup label="Ready to use">
+                            <option v-for="r in modelGroups.ready" :key="r.id" :value="r.id">{{ r.name }}</option>
+                        </optgroup>
+                        <optgroup v-if="modelGroups.mine.length" label="Your variants (files missing)">
+                            <option v-for="r in modelGroups.mine" :key="r.id" :value="r.id">{{ r.name }}</option>
+                        </optgroup>
+                        <optgroup label="Other model types (pick their files yourself)">
+                            <option v-for="r in modelGroups.builtin" :key="r.id" :value="r.id">{{ r.name }}</option>
+                        </optgroup>
+                    </select>
+                    <small v-if="currentRecipe" class="faint">
+                        <template v-if="!currentIsReady">Needs its files picked under Model files · </template>
+                        {{ currentRecipe.defaults?.steps ?? "?" }} steps · {{ currentRecipe.defaults?.width }}×{{ currentRecipe.defaults?.height }}
+                    </small>
                 </div>
 
                 <div class="field">
                     <span>What to make</span>
                     <div class="task-chips" role="group" aria-label="Task">
                         <button
-                            v-for="task in tasks"
+                            v-for="task in TASKS"
                             :key="task.id"
                             type="button"
                             class="task-chip"
-                            :aria-pressed="currentTask?.id === task.id"
-                            :title="task.hint"
-                            @click="form.task = task.id"
+                            :class="{ off: !supported.has(task.id) }"
+                            :aria-pressed="supported.has(task.id) ? currentTask?.id === task.id : blocked === task.id"
+                            :title="supported.has(task.id) ? task.hint : `${currentRecipe?.name || 'This model'} cannot do this. Click to see which models can.`"
+                            @click="chooseTask(task)"
                         >
-                            <Icon :name="task.output === 'video' ? 'video' : 'image'" :size="14" />{{ task.label }}
+                            <Icon :name="taskIcon(task)" :size="14" />{{ task.label }}
                         </button>
                     </div>
-                    <small class="faint">{{ currentTask?.hint }}<template v-if="inputSupport.sound"> This model also makes sound.</template></small>
+                    <div v-if="blockedTask" class="blocked">
+                        <p v-if="TASK_NOT_IN_SDCPP[blockedTask.id] && !whoCan.types.length">{{ TASK_NOT_IN_SDCPP[blockedTask.id] }}</p>
+                        <template v-else>
+                            <p><strong>{{ currentRecipe?.name || "This model" }}</strong> cannot do {{ blockedTask.label.toLowerCase() }}. {{ blockedTask.hint }}</p>
+                            <div v-if="whoCan.ready.length" class="blocked-actions">
+                                <span class="faint small">Ready on this computer:</span>
+                                <button v-for="r in whoCan.ready" :key="r.id" class="btn-secondary" type="button" @click="switchTo(r)">Use {{ r.name }}</button>
+                            </div>
+                            <p v-if="whoCan.types.length" class="faint small">
+                                Model types that can: {{ whoCan.types.join(", ") }}. Download one or add your own on
+                                <button class="link" type="button" @click="emit('open-models')">Models</button>.
+                            </p>
+                        </template>
+                    </div>
+                    <small v-else class="faint">{{ currentTask?.hint }}<template v-if="inputSupport.sound"> This model also makes sound.</template></small>
                 </div>
 
                 <details class="files-box" :open="filesOpen || missingFiles.length > 0" @toggle="onFilesToggle">
@@ -543,33 +578,46 @@ function resetAdvanced() {
     color: var(--text-2);
 }
 
-.models {
+.label-row {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.model-select {
+    font-weight: 600;
+}
+
+.blocked {
     display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px dashed var(--line-strong);
+    border-radius: 10px;
+    background: var(--bg-sunken);
+    font-size: 13px;
+}
+
+.blocked p {
+    margin: 0;
+    line-height: 1.5;
+}
+
+.blocked-actions {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
     gap: 6px;
 }
 
-.model {
-    display: grid;
-    gap: 2px;
-    text-align: left;
-    padding: 10px 12px;
-    border-radius: 10px;
-    border: 1px solid var(--line);
-    background: var(--bg-raised);
-    cursor: pointer;
+.blocked .link {
+    display: inline;
+    font-size: inherit;
 }
 
-.model:hover {
-    border-color: var(--line-strong);
-}
-
-.model[aria-pressed="true"] {
-    border-color: var(--accent);
-    background: var(--accent-soft);
-}
-
-.model small {
-    color: var(--text-3);
+.small {
+    font-size: 12px;
 }
 
 .link {
@@ -640,6 +688,18 @@ function resetAdvanced() {
     color: var(--text);
 }
 
+.task-chip.off {
+    border-style: dashed;
+    background: transparent;
+    color: var(--text-3);
+}
+
+.task-chip.off[aria-pressed="true"] {
+    border-color: var(--line-strong);
+    background: var(--bg-hover);
+    color: var(--text-2);
+}
+
 .inputs-head {
     font-weight: 600;
     font-size: 13px;
@@ -660,13 +720,6 @@ function resetAdvanced() {
     font-style: normal;
     font-weight: 400;
     margin-left: 4px;
-}
-
-.model-more {
-    display: grid;
-    grid-template-columns: minmax(0, 1fr) auto;
-    align-items: center;
-    gap: 10px;
 }
 
 .files-box {

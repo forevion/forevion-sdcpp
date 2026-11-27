@@ -115,6 +115,13 @@ model and its defaults when the job starts.
 | DELETE | `/sdcpp/v1/model-files/{file id}` | Delete a model file; refused with 409 when the loaded model uses it |
 | GET | `/sdcpp/v1/config/backup` | One JSON file (`kind: sdcpp-studio-config`) with every user recipe and download package file |
 | POST | `/sdcpp/v1/config/restore` | `{backup, mode: merge \| replace}`: validate every entry, then write them (replace first removes current user recipes and packages); nothing changes when any entry is invalid |
+| GET | `/sdcpp/v1/inputs/files/{file}` | An uploaded input kept in `--input-dir` (`input-<hash>.png/.jpg/.webp/.wav`); saved results list them under `inputs` (`init_image`, `end_image`, `ref_images`, `ref_audios`, `control_frames`) |
+| GET | `/sdcpp/v1/settings/folders` | `{settings_file, can_save, needs_setup, can_browse, folders: {models, inputs, outputs: {path, exists}}, suggested}` |
+| PUT | `/sdcpp/v1/settings/folders` | `{models, inputs, outputs}` as full paths: create missing folders, save them in `--settings-file` and switch to them at once; 409 while jobs are queued or running |
+| GET | `/sdcpp/v1/settings/catalog` | `{url, can_save}`: the online catalog address |
+| PUT | `/sdcpp/v1/settings/catalog` | `{url}`: save a new `https://` catalog address in `--settings-file` (empty turns it off); call `download-catalog/refresh` to load it |
+| GET | `/sdcpp/v1/fs/dirs?path=` | `{path, parent, dirs: [{name, path}], roots, warning}`: subfolders of `path` (default: the home folder) without hidden and system folders. Only for requests from the server's own computer (403 otherwise) |
+| POST | `/sdcpp/v1/fs/mkdir` | `{path}`: create a folder (full path). Only for requests from the server's own computer |
 
 Example `POST /sdcpp/v1/img_gen` request with a model selection.
 

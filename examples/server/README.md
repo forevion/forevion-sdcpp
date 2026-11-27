@@ -90,7 +90,7 @@ checkout (`scripts/setup-sdcpp.sh`, building into `build-linux/` and using the c
 ### Start the server
 
 From the repository root, start the launcher. It finds the server executable
-and uses the repository's `models/` directory:
+and starts it with `--settings-file studio-settings.json` next to the launcher:
 
 **Windows (PowerShell)**
 
@@ -131,6 +131,23 @@ for another build configuration or an extracted release archive. Open
 <http://127.0.0.1:1234/> after the server starts, and keep the server running
 while using the browser.
 
+### Choose your folders
+
+On the first start the browser shows **Welcome to Forevion Studio** and asks for three
+folders before anything else:
+
+- **Models**: model files. Pick the folder that already holds your models to use them;
+  downloads go into `diffusion_models/`, `text_encoders/`, `vae/`, ... inside it.
+- **Inputs**: start images, reference images, audio and control videos you add on Create.
+- **Outputs**: finished images and videos (the Gallery).
+
+Type a full path or click **Browse…** to pick a folder (with **Create folder**); missing
+folders are created. The choice is saved in `studio-settings.json` next to the launcher
+and applied at once, without a restart. Nothing is created next to the app until the
+folders are chosen. Change them later in **Models → Settings → Folders**. The screen
+appears again if a saved folder no longer exists. Browsing only works in a browser on the
+computer that runs the server; from another device, type the paths.
+
 ### Get models
 
 **Models** shows one card per model with its state (Not downloaded, Downloading,
@@ -154,24 +171,40 @@ input it needs (it lists what is still missing), set the defaults and save.
 
 **Settings** holds:
 
+- **Folders**: the models, inputs and outputs folders (see [Choose your folders](#choose-your-folders)).
 - **Storage**: every model file with its size, the variants that use it and the free
   disk space; files can be deleted after a confirmation.
 - **Backup and restore**: save or load all variants and added downloads as one JSON file.
-- **Model list**: refresh the online model list, rescan the model folders, add a single
-  file from a link (Hugging Face links get their size and SHA-256 automatically) or a
-  new download entry.
+- **Model list**: where the online model list comes from (**Released (master)**,
+  **Latest (develop)**, another address, or off), refresh it, rescan the model folders,
+  add a single file from a link (Hugging Face links get their size and SHA-256
+  automatically) or a new download entry.
+
+The model list is plain data (`downloads.json`), so adding or changing a model entry needs
+no rebuild or restart: edit `downloads.json` on GitHub and click **Refresh model list**.
+Choose **Latest (develop)** to get such edits before they are released.
+
+The built-in list has FastWan 2.2 5B, Wan 2.2 TI2V 5B, Wan 2.2 T2V / I2V A14B, Wan 2.2 S2V
+14B, Wan 2.1 T2V 1.3B / 14B, Wan 2.1 I2V 14B (480p and 720p), Wan 2.1 FLF2V 14B, Wan 2.1
+VACE 1.3B / 14B and Kandinsky 6.0 Lite. The 14B models use Q4_K_M files (about 10 GB each)
+so they fit in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
 
 Downloads never create variants by themselves. Files placed by hand in the category
 folders (see [Model directories](#model-directories)) work the same way after a rescan.
 
 ### Create images and videos
 
-1. Open **Create** and pick a model. Only models whose files are all present are listed.
-   **Model files** shows a picker for every input of the chosen variant; **Save as
-   variant** stores a changed combination.
-2. Pick what to make under **What to make**. The list depends on the model: text to
-   video, image to video, sound to video (lip sync), reference to video, video to video,
-   text to image, image to image or image edit.
+1. Open **Create** and pick a model from the **Model** list: ready variants first, then
+   your variants with missing files, then other model types whose files you pick
+   yourself. **Model files** shows a picker for every input of the chosen variant;
+   **Save as variant** stores a changed combination.
+2. Pick what to make under **What to make**. Every task is listed; the ones the chosen
+   model cannot do are dashed. Clicking one says why and lists the ready models that can
+   (with a **Use** button) and the model types to download or add. The tasks are text to
+   video, image to video, speech to video (lip sync), character to video (keep a person or
+   object from a picture, for example with Wan 2.1 VACE), video to video, text to image,
+   image to image, image edit, and text to audio, which no stable-diffusion.cpp model can
+   do yet.
 3. Add the inputs the task needs under **Inputs**: a start image (optional for some
    models, required for image to video), an end frame, reference images, an audio clip
    (any format the browser can decode, sent as WAV, up to 30 s) or a control video
@@ -182,6 +215,9 @@ folders (see [Model directories](#model-directories)) work the same way after a 
    elapsed time and time left; **Stop** cancels it. More jobs wait in the **Queue**.
 6. The result appears in the preview with **Reuse**, **Save**, **Delete** and close
    buttons, and in the **Recent** strip.
+
+The inputs of each job are kept in the inputs folder (one file per distinct image or
+clip), and **Reuse** puts them back into the form together with the prompt and settings.
 
 **Command** shows what the job runs: the matching `sd-cli` command (PowerShell or
 bash, depending on the server's model folder), the JSON request for
@@ -684,8 +720,17 @@ to the server in `SDCPP_SERVER` (default `http://127.0.0.1:1234`).
 ### Saved results
 
 Finished image and video jobs are written to `--output-dir` (default `outputs`), each file
-with a `.json` sidecar holding the prompt, settings, seed and stage timings. The Gallery
-reads this folder. `--output-dir none` turns saving off.
+with a `.json` sidecar holding the prompt, settings, seed, stage timings and the URLs of
+the job's saved inputs. The Gallery reads this folder. `--output-dir none` turns saving off.
+
+`--input-dir` keeps the uploaded start and end images, reference images, audio and control
+frames of each job, named by their content so a picture used twice is stored once
+(default: not kept).
+
+`--settings-file` names a JSON file that holds `models_dir`, `inputs_dir`, `outputs_dir`
+and `catalog_url`. When it names three existing folders they replace `--model-dir`,
+`--input-dir` and `--output-dir`; until then the Web UI asks for the folders first. The
+Web UI writes this file; the launchers pass `studio-settings.json` next to themselves.
 
 ### Model downloads
 
@@ -693,8 +738,8 @@ The Download tab merges three catalog layers; a package with the same `id` in a 
 layer replaces the earlier one:
 
 1. the built-in `downloads.json`;
-2. the online catalog from `--catalog-url` (default: this file on the `master` branch of
-   forevion-sdcpp; `none` turns it off), cached as `<model-dir>/downloads/.online-catalog.json`
+2. the online catalog from `--catalog-url` or the source chosen in **Settings → Model list**
+   (default: this file on the `master` branch of forevion-sdcpp; `none` turns it off), cached as `<model-dir>/downloads/.online-catalog.json`
    so it keeps working offline;
 3. `<model-dir>/downloads/*.json` in the first model root: packages added or edited in
    the UI (`<id>.json`) and any written by hand.
@@ -706,7 +751,7 @@ and optional SHA-256, and optionally:
 - `convert`: files fetched to a staging folder and packed into one GGUF. `types` lists the
   output types in order of preference with an optional `min_ram_gb`; the first type the
   machine has enough RAM for is used. `{type}` in `output` is replaced by that type.
-- `guide`: the setup guide shown on the Model configs tab. `inputs` maps input types
+- `guide`: the setup guide used by **Set up** on the Models page. `inputs` maps input types
   (`diffusion_model`, `t5xxl`, `llm`, `clip_l`, `vae`, `tae`, ...) to files, `alternatives`
   lists optional swaps, `settings` holds the config defaults and rules (`defaults`,
   `video_constraints`, `size_multiple`, `features`, `disabled_features`), and `notes` explain

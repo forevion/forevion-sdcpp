@@ -6,6 +6,8 @@ MODEL_DIR="./models"
 COMMANDLINE_ARGS=""
 
 script_dir=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+# Models, inputs and outputs folders chosen in the Web UI on first start.
+SETTINGS_FILE="${SD_SETTINGS_FILE:-$script_dir/studio-settings.json}"
 
 # Opened by a double-click in a file manager: there is no terminal, so the server would run
 # invisibly and errors would be lost. Reopen this script in a terminal window instead, from
@@ -33,7 +35,7 @@ fi
 if [ "${1:-}" != "--version" ]; then
     # Split configured arguments on whitespace without expanding wildcards.
     set -f
-    set -- --model-dir "$MODEL_DIR" $COMMANDLINE_ARGS "$@"
+    set -- --model-dir "$MODEL_DIR" --settings-file "$SETTINGS_FILE" $COMMANDLINE_ARGS "$@"
 fi
 
 run_server() {

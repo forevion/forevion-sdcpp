@@ -82,7 +82,7 @@ async function copy(text: string, what: string) {
     display: grid;
     gap: 14px;
     width: min(860px, 100%);
-    max-height: 100%;
+    max-height: calc(100dvh - 40px);
     padding: 20px;
     overflow-y: auto;
 }

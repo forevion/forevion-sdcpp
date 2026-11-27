@@ -53,6 +53,8 @@ onBeforeUnmount(() => window.removeEventListener("keydown", onKey));
     gap: 12px;
     width: min(520px, 100%);
     padding: 20px;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
 }
 
 .message {

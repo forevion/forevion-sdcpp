@@ -83,6 +83,7 @@ add_executable(${TARGET}
     library.cpp
     downloads.cpp
     model_manager.cpp
+    studio_settings.cpp
     routes_media.cpp
 )
 if(APPLE)
