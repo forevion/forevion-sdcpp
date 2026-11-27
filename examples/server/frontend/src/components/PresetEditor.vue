@@ -64,7 +64,24 @@ const form = reactive({
     frames: null as number | null,
     fps: null as number | null,
     flowShift: null as number | null,
+    abilities: [] as string[],
 });
+
+// Abilities map to recipe features; they decide which tasks Create offers for this variant.
+const ABILITIES = [
+    { id: "init_image", label: "Start from an image (image → video)", video: true },
+    { id: "end_image", label: "End on an image (first/last frame)", video: true },
+    { id: "ref_audios", label: "Speech / audio input (lip sync)", video: true },
+    { id: "control_frames", label: "Follow a control video (video → video)", video: true },
+    { id: "ref_images", label: "Reference or edit images", video: null },
+    { id: "img2img", label: "Redraw an image (image → image)", video: false },
+] as const;
+
+function loadAbilities() {
+    const declared = new Set<string>(extras.value.features || []);
+    const disabled = new Set<string>(extras.value.disabled_features || []);
+    form.abilities = ABILITIES.filter((a) => (a.id === "img2img" ? !disabled.has("img2img") : declared.has(a.id))).map((a) => a.id);
+}
 
 const guides = computed(() => (state.downloads?.packages || []).filter((p) => p.guide?.inputs));
 const guide = computed<DownloadPackage | undefined>(() => guides.value.find((p) => p.id === guideId.value));
@@ -111,6 +128,7 @@ function applyGuide() {
     loadDefaults(settings.defaults);
     const { defaults: _ignored, ...rest } = settings;
     extras.value = { ...rest, defaults: { ...(settings.defaults || {}) } };
+    loadAbilities();
     form.video = Boolean(settings.video_constraints || settings.defaults?.video_frames);
     if (!form.name || props.mode === "new") {
         form.name = pkg.name;
@@ -140,11 +158,26 @@ function setText(target: Record<string, unknown>, key: string, value: string) {
 
 async function save() {
     error.value = "";
-    if (!form.name.trim()) return void (error.value = "Give the config a name.");
+    if (!form.name.trim()) return void (error.value = "Give the variant a name.");
     if (!/^[A-Za-z0-9_.-]{1,128}$/.test(form.id)) return void (error.value = "The ID may use letters, digits, dots, dashes and underscores.");
-    if (idTaken.value) return void (error.value = "You already have a config with this ID.");
+    if (idTaken.value) return void (error.value = "You already have a variant with this ID.");
 
     const recipe: Record<string, any> = { ...extras.value, schema_version: 1, id: form.id, name: form.name.trim() };
+    const features = new Set<string>(recipe.features || []);
+    const disabled = new Set<string>(recipe.disabled_features || []);
+    for (const ability of ABILITIES) {
+        const on = form.abilities.includes(ability.id) && (ability.video === null || ability.video === form.video);
+        if (ability.id === "img2img") {
+            if (on) disabled.delete("img2img");
+            else disabled.add("img2img");
+        } else if (on) features.add(ability.id);
+        else features.delete(ability.id);
+    }
+    if (features.has("control_frames")) features.add("vace");
+    if (features.size) recipe.features = [...features];
+    else delete recipe.features;
+    if (disabled.size) recipe.disabled_features = [...disabled];
+    else delete recipe.disabled_features;
     setText(recipe, "description", form.description.trim());
     if (props.mode === "new") {
         const chosen = slotList.value.filter((s) => form.models[s.id]);
@@ -214,6 +247,7 @@ onMounted(async () => {
     }
     const { id: _id, name: _name, description: _description, ...rest } = base;
     extras.value = rest;
+    loadAbilities();
     form.name = props.mode === "copy" ? `${props.base!.name} (my copy)` : props.base!.name;
     form.id = props.mode === "copy" ? slugify(`${props.base!.id}-custom`) : props.base!.id;
     form.description = props.base!.description || "";
@@ -228,7 +262,7 @@ onMounted(async () => {
         <form class="dialog panel" @submit.prevent="save">
             <header class="head">
                 <div>
-                    <h2 id="preset-title">{{ mode === "edit" ? "Edit model config" : "New model config" }}</h2>
+                    <h2 id="preset-title">{{ mode === "edit" ? "Edit variant" : "New variant" }}</h2>
                     <p class="faint small">
                         <template v-if="mode === 'copy'">Starting from {{ base?.name }}. </template>
                         Pick a file for each input the model needs, then save.
@@ -271,7 +305,7 @@ onMounted(async () => {
                     <label class="field"><span>Name</span><input v-model="form.name" class="input" placeholder="e.g. FastWan quick clips" @input="onName" /></label>
                     <label class="field"><span>ID</span><input v-model="form.id" class="input mono" :disabled="mode === 'edit'" @input="form.idTouched = true" /></label>
                 </div>
-                <p v-if="overridesBuiltin" class="warn small">This ID matches a built-in model type; your config will replace it until you delete yours.</p>
+                <p v-if="overridesBuiltin" class="warn small">This ID matches a built-in model type; your variant will replace it until you delete yours.</p>
                 <label class="field"><span>Description</span><textarea v-model="form.description" class="input" rows="2" /></label>
 
                 <template v-for="group in groups" :key="group.title">
@@ -302,6 +336,14 @@ onMounted(async () => {
                 <button v-if="mode === 'new'" class="btn-ghost more" type="button" @click="showMore = !showMore">
                     {{ showMore ? "Fewer inputs" : "More inputs (vision, audio, ControlNet and other extras)" }}
                 </button>
+
+                <h3>Abilities</h3>
+                <p class="faint small">What this model can do; Create offers the matching tasks. Leave these as the guide or model type set them unless you know the model supports more.</p>
+                <div class="abilities">
+                    <label v-for="a in ABILITIES.filter((x) => x.video === null || x.video === form.video)" :key="a.id" class="check">
+                        <input v-model="form.abilities" type="checkbox" :value="a.id" /> {{ a.label }}
+                    </label>
+                </div>
 
                 <h3>Defaults</h3>
                 <label class="check"><input v-model="form.video" type="checkbox" /> Makes video (set frames and FPS)</label>
@@ -338,7 +380,7 @@ onMounted(async () => {
             <p v-if="error" class="status-message status-message--error">{{ error }}</p>
             <footer class="actions">
                 <button class="btn-ghost" type="button" @click="emit('close')">Cancel</button>
-                <button class="btn" type="submit" :disabled="saving"><Icon name="check" :size="16" />{{ saving ? "Saving…" : "Save config" }}</button>
+                <button class="btn" type="submit" :disabled="saving"><span v-if="saving" class="spin" /><Icon v-else name="check" :size="16" />{{ saving ? "Saving…" : "Save variant" }}</button>
             </footer>
         </form>
     </div>
@@ -462,6 +504,12 @@ small,
 .warn {
     margin: 0;
     color: var(--warn);
+}
+
+.abilities {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 14px;
 }
 
 .check {

@@ -1,7 +1,11 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import CommandDialog from "../components/CommandDialog.vue";
 import Icon from "../components/Icon.vue";
+import AudioInput from "../components/AudioInput.vue";
+import ImageInput from "../components/ImageInput.vue";
+import VideoFramesInput from "../components/VideoFramesInput.vue";
 import MediaView from "../components/MediaView.vue";
 import PresetEditor from "../components/PresetEditor.vue";
 import { categoryLabel } from "../lib/categories";
@@ -16,7 +20,11 @@ import {
     eta,
     formatDuration,
     hasFileChanges,
+    currentTask,
+    inputSupport,
     missingFiles,
+    missingInputs,
+    tasks,
     newCreation,
     plan,
     readyRecipes,
@@ -39,6 +47,34 @@ const aspects: Aspect[] = ["16:9", "4:3", "1:1", "9:16"];
 const submitting = ref(false);
 const savingPreset = ref<Recipe | null>(null);
 const filesOpen = ref(false);
+const showCommand = ref(false);
+
+const startImages = computed(() => (state.inputs.startImage ? [{ name: state.inputs.startName, data: state.inputs.startImage }] : []));
+const endImages = computed(() => (state.inputs.endImage ? [{ name: state.inputs.endName, data: state.inputs.endImage }] : []));
+const hasInputs = computed(() => {
+    const s = inputSupport.value;
+    return s.startFrame || s.endFrame || s.refImages || s.audio || s.control || s.strength;
+});
+
+function setEnd(image: { name: string; data: string }) {
+    state.inputs.endImage = image.data;
+    state.inputs.endName = image.name;
+}
+
+function clearEnd() {
+    state.inputs.endImage = "";
+    state.inputs.endName = "";
+}
+
+function setStart(image: { name: string; data: string }) {
+    state.inputs.startImage = image.data;
+    state.inputs.startName = image.name;
+}
+
+function clearStart() {
+    state.inputs.startImage = "";
+    state.inputs.startName = "";
+}
 
 // Ready presets as cards, plus the current one when it was picked from "Other model" and still needs files.
 const modelCards = computed(() => {
@@ -98,6 +134,11 @@ function onPresetSaved(id: string) {
 }
 
 const isVideoModel = computed(() => recipeIsVideo(currentRecipe.value));
+// Keep the stored task valid for the chosen model, and the legacy mode flag in step with it.
+watch(currentTask, (task) => {
+    if (task && form.task !== task.id) form.task = task.id;
+    form.mode = task?.output === "video" ? "video" : "image";
+}, { immediate: true });
 watch(isVideoModel, (video) => {
     if (!video) form.mode = "image";
 });
@@ -177,7 +218,8 @@ function resetAdvanced() {
                 <button class="btn-secondary new-btn" type="button" title="Clear the prompt and preview" @click="newCreation"><Icon name="create" :size="16" />New</button>
             </header>
 
-            <div v-if="!state.files.length" class="panel no-models">
+            <p v-if="state.loading.catalog" class="loading-row"><span class="spin" />Loading models…</p>
+            <div v-else-if="!state.files.length" class="panel no-models">
                 <Icon name="models" :size="28" />
                 <p>No models are ready yet.</p>
                 <button class="btn" type="button" @click="emit('open-models')"><Icon name="download" />Get models</button>
@@ -202,7 +244,7 @@ function resetAdvanced() {
                     <div class="model-more">
                         <select class="input" aria-label="Other model" @change="pickOther">
                             <option value="">Other model… (pick its files yourself)</option>
-                            <optgroup v-if="otherModels.mine.length" label="Your configs (files missing)">
+                            <optgroup v-if="otherModels.mine.length" label="Your variants (files missing)">
                                 <option v-for="r in otherModels.mine" :key="r.id" :value="r.id">{{ r.name }}</option>
                             </optgroup>
                             <optgroup label="Built-in model types">
@@ -213,13 +255,22 @@ function resetAdvanced() {
                     </div>
                 </div>
 
-                <div class="segmented" role="group" aria-label="Output type">
-                    <button type="button" :aria-pressed="form.mode === 'video'" :disabled="!isVideoModel" @click="form.mode = 'video'">
-                        <Icon name="video" :size="16" /> Video
-                    </button>
-                    <button type="button" :aria-pressed="form.mode === 'image'" @click="form.mode = 'image'">
-                        <Icon name="image" :size="16" /> Image
-                    </button>
+                <div class="field">
+                    <span>What to make</span>
+                    <div class="task-chips" role="group" aria-label="Task">
+                        <button
+                            v-for="task in tasks"
+                            :key="task.id"
+                            type="button"
+                            class="task-chip"
+                            :aria-pressed="currentTask?.id === task.id"
+                            :title="task.hint"
+                            @click="form.task = task.id"
+                        >
+                            <Icon :name="task.output === 'video' ? 'video' : 'image'" :size="14" />{{ task.label }}
+                        </button>
+                    </div>
+                    <small class="faint">{{ currentTask?.hint }}<template v-if="inputSupport.sound"> This model also makes sound.</template></small>
                 </div>
 
                 <details class="files-box" :open="filesOpen || missingFiles.length > 0" @toggle="onFilesToggle">
@@ -227,7 +278,7 @@ function resetAdvanced() {
                         Model files
                         <span v-if="missingFiles.length" class="chip chip--danger">{{ missingFiles.length }} missing</span>
                         <span v-else-if="hasFileChanges" class="chip chip--accent">changed</span>
-                        <span v-else class="faint small">from the config</span>
+                        <span v-else class="faint small">from the variant</span>
                         <Icon name="chevron" :size="14" />
                     </summary>
                     <div class="files-body">
@@ -244,8 +295,8 @@ function resetAdvanced() {
                         </label>
                         <p v-if="requiredAnyText" class="faint small">Needs at least one of: {{ requiredAnyText }}.</p>
                         <div class="files-actions">
-                            <button class="link" type="button" :disabled="!hasFileChanges" @click="resetFileChoices">Use the config's files</button>
-                            <button class="link" type="button" :disabled="missingFiles.length > 0" @click="saveAsPreset">Save as model config…</button>
+                            <button class="link" type="button" :disabled="!hasFileChanges" @click="resetFileChoices">Use the variant's files</button>
+                            <button class="link" type="button" :disabled="missingFiles.length > 0" @click="saveAsPreset">Save as variant…</button>
                         </div>
                     </div>
                 </details>
@@ -259,6 +310,42 @@ function resetAdvanced() {
                         placeholder="A red fox trotting through fresh snow at sunrise, soft golden light, cinematic"
                     />
                 </label>
+
+                <section v-if="hasInputs" class="files-box inputs-box">
+                    <div class="inputs-head">Inputs <span class="faint small">for {{ currentTask?.label.toLowerCase() }}</span></div>
+                    <div class="files-body">
+                        <div v-if="inputSupport.startFrame" class="field">
+                            <span>{{ inputSupport.startLabel }} <em :class="inputSupport.startRequired ? 'req' : 'faint'">{{ inputSupport.startRequired ? "required" : "optional" }}</em></span>
+                            <ImageInput :images="startImages" @add="setStart" @remove="clearStart" />
+                            <small v-if="state.inputs.startImage" class="faint">Resized to {{ plan.width }}×{{ plan.height }}; pick a matching shape to avoid cropping.</small>
+                        </div>
+                        <div v-if="inputSupport.endFrame" class="field">
+                            <span>End frame <em class="faint">optional, the clip ends on this picture</em></span>
+                            <ImageInput :images="endImages" @add="setEnd" @remove="clearEnd" />
+                        </div>
+                        <div v-if="inputSupport.refImages" class="field">
+                            <span>{{ currentTask?.id === "edit" ? "Images to edit" : "Reference images" }} <em class="faint">{{ currentTask?.id === "edit" ? "describe the change in the prompt" : "refer to them as Picture 1, Picture 2 … in the prompt" }}</em></span>
+                            <ImageInput :images="state.inputs.refImages" multiple :max="4" @add="state.inputs.refImages.push($event)" @remove="state.inputs.refImages.splice($event, 1)" />
+                        </div>
+                        <div v-if="inputSupport.audio" class="field">
+                            <span>{{ currentTask?.id === "s2v" ? "Speech" : "Reference audio" }} <em :class="currentTask?.id === 's2v' ? 'req' : 'faint'">{{ currentTask?.id === "s2v" ? "required" : "optional" }}</em></span>
+                            <AudioInput :audio="state.inputs.audio" @set="state.inputs.audio = $event" />
+                            <small v-if="currentTask?.id === 's2v' && state.inputs.audio && plan.seconds < state.inputs.audio.seconds" class="faint">
+                                The clip is {{ plan.seconds.toFixed(1) }} s; set Length to {{ state.inputs.audio.seconds.toFixed(1) }} s to cover all of the speech.
+                            </small>
+                        </div>
+                        <div v-if="inputSupport.control" class="field">
+                            <span>Control video <em class="req">required</em></span>
+                            <VideoFramesInput :video="state.inputs.control" :frames="plan.renderFrames" :fps="plan.fps" :width="plan.width" :height="plan.height" @set="state.inputs.control = $event" />
+                            <small class="faint">Frames are taken at {{ plan.fps }} fps for {{ plan.renderFrames }} frames; set Length and Shape first.</small>
+                        </div>
+                        <div v-if="inputSupport.strength" class="field">
+                            <span>Strength <b class="value">{{ form.strength.toFixed(2) }}</b></span>
+                            <input v-model.number="form.strength" class="range" type="range" min="0.05" max="1" step="0.05" />
+                            <small class="faint">Low keeps the picture, high changes more.</small>
+                        </div>
+                    </div>
+                </section>
 
                 <div class="row2">
                     <div class="field">
@@ -325,13 +412,21 @@ function resetAdvanced() {
                         <span v-if="estimate != null" class="accent">{{ eta(estimate) }}</span>
                     </div>
                     <p v-if="missingFiles.length" class="status-message status-message--error">Choose a file for: {{ missingFiles.join(", ") }} (Model files above).</p>
+                    <p v-if="missingInputs.length" class="status-message status-message--error">Add {{ missingInputs.join(" and ") }} (Inputs above).</p>
                     <p v-if="state.error" class="status-message status-message--error">{{ state.error }}</p>
-                    <button class="btn btn-lg" type="button" :disabled="!form.prompt.trim() || submitting || missingFiles.length > 0" @click="generate">
-                        <Icon name="sparkles" />
-                        {{ activeJobs.length ? `Add to queue (${activeJobs.length} ahead)` : "Generate" }}
-                    </button>
+                    <div class="go-row">
+                        <button class="btn btn-lg" type="button" :disabled="!form.prompt.trim() || submitting || missingFiles.length > 0 || missingInputs.length > 0" @click="generate">
+                            <span v-if="submitting" class="spin" aria-hidden="true" />
+                            <Icon v-else name="sparkles" />
+                            {{ submitting ? "Sending…" : activeJobs.length ? `Add to queue (${activeJobs.length} ahead)` : "Generate" }}
+                        </button>
+                        <button class="btn-secondary btn-lg" type="button" title="Show the equivalent sd-cli command and API request" @click="showCommand = true">
+                            <Icon name="scripts" :size="18" />Command
+                        </button>
+                    </div>
                 </div>
             </template>
+            <CommandDialog v-if="showCommand" @close="showCommand = false" />
             <PresetEditor v-if="savingPreset" :base="savingPreset" mode="copy" @close="savingPreset = null" @saved="onPresetSaved" />
         </section>
 
@@ -511,6 +606,60 @@ function resetAdvanced() {
     float: right;
     color: var(--text);
     font-weight: 600;
+}
+
+.task-chips {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+}
+
+.task-chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    min-height: 32px;
+    padding: 0 11px;
+    border: 1px solid var(--line);
+    border-radius: 999px;
+    background: var(--bg-sunken);
+    color: var(--text-2);
+    font-weight: 550;
+    font-size: 13px;
+    cursor: pointer;
+}
+
+.task-chip:hover {
+    border-color: var(--line-strong);
+    color: var(--text);
+}
+
+.task-chip[aria-pressed="true"] {
+    border-color: var(--accent);
+    background: var(--accent-soft);
+    color: var(--text);
+}
+
+.inputs-head {
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-2);
+}
+
+.inputs-box .req {
+    color: var(--accent-strong);
+}
+
+.go-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    gap: 8px;
+}
+
+.images-box em {
+    font-style: normal;
+    font-weight: 400;
+    margin-left: 4px;
 }
 
 .model-more {

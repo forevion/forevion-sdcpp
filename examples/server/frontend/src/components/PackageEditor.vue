@@ -143,7 +143,7 @@ onMounted(async () => {
                 <button class="btn-ghost icon-btn" type="button" aria-label="Close" @click="emit('close')"><Icon name="close" /></button>
             </header>
 
-            <p v-if="loading" class="faint">Loading…</p>
+            <p v-if="loading" class="loading-row"><span class="spin" />Loading the package…</p>
             <div v-else class="body">
                 <div class="row2">
                     <label class="field"><span>Name</span><input v-model="form.name" class="input" @input="onName" /></label>
@@ -167,7 +167,7 @@ onMounted(async () => {
                     </div>
                     <div class="file-url">
                         <input v-model="row.url" class="input mono" placeholder="https://huggingface.co/owner/repo/blob/main/file.gguf" aria-label="Link" />
-                        <button class="btn-secondary" type="button" :disabled="row.busy" @click="lookup(row)">{{ row.busy ? "Checking…" : "Look up" }}</button>
+                        <button class="btn-secondary" type="button" :disabled="row.busy" @click="lookup(row)"><span v-if="row.busy" class="spin" />{{ row.busy ? "Checking…" : "Look up" }}</button>
                     </div>
                     <div class="file-meta">
                         <label class="mini">Size (bytes) <input v-model.number="row.size" class="input mono" type="number" min="0" placeholder="unknown" /></label>
@@ -186,7 +186,7 @@ onMounted(async () => {
             <footer class="actions">
                 <button class="btn-ghost" type="button" @click="emit('close')">Cancel</button>
                 <button class="btn" type="submit" :disabled="saving || loading || (definition !== null && !definition.editable)">
-                    <Icon name="check" :size="16" />{{ saving ? "Saving…" : "Save package" }}
+                    <span v-if="saving" class="spin" /><Icon v-else name="check" :size="16" />{{ saving ? "Saving…" : "Save package" }}
                 </button>
             </footer>
         </form>

@@ -1,6 +1,8 @@
 import { computed, reactive, watch } from "vue";
 
 import { api } from "./api";
+import { availableTasks, producesAudio } from "./tasks";
+import type { TaskId } from "./tasks";
 import type { DownloadCatalog, Job, JobSummaryEntry, ModelFile, OutputEntry, Recipe } from "./types";
 
 export type Aspect = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
@@ -9,6 +11,8 @@ export type SizePreset = "small" | "normal";
 export interface CreateForm {
     recipeId: string;
     mode: "video" | "image";
+    task: TaskId;
+    strength: number;
     prompt: string;
     negativePrompt: string;
     aspect: Aspect;
@@ -30,6 +34,8 @@ function loadForm(): CreateForm {
     const fallback: CreateForm = {
         recipeId: "",
         mode: "video",
+        task: "t2v",
+        strength: 0.75,
         prompt: "",
         negativePrompt: "",
         aspect: "16:9",
@@ -64,6 +70,18 @@ export const state = reactive({
     lastCompleted: null as OutputEntry | null,
     createSelected: null as OutputEntry | null,
     queueOpen: false,
+    // True until the first load of each list finishes, so pages can show a loader instead of "empty".
+    loading: { catalog: true, outputs: true, downloads: true },
+    // Optional input images as data URLs; kept in memory only (too large for local storage).
+    inputs: {
+        startImage: "" as string,
+        startName: "" as string,
+        endImage: "" as string,
+        endName: "" as string,
+        refImages: [] as { name: string; data: string }[],
+        audio: null as { name: string; data: string; seconds: number } | null,
+        control: null as { name: string; frames: string[] } | null,
+    },
 });
 
 watch(
@@ -182,7 +200,7 @@ export const plan = computed(() => {
     const form = state.form;
     const { width, height } = frameSize(recipe, form.aspect, form.size);
     const fps = recipe?.video_constraints?.fixed_fps ?? form.fps ?? recipe?.defaults?.fps ?? 24;
-    const video = form.mode === "video" && recipeIsVideo(recipe);
+    const video = currentTask.value?.output === "video" && recipeIsVideo(recipe);
     const still = video ? null : stillClip(recipe);
     const frames = video ? alignFrames(Math.max(1, Math.round(form.seconds * fps)), recipe) : 1;
     const renderFrames = still ? alignFrames(still.frames, recipe) : frames;
@@ -190,10 +208,45 @@ export const plan = computed(() => {
     return { recipe, width, height, fps, frames, renderFrames, still, steps, video, seconds: frames / fps };
 });
 
+// What the chosen config accepts, from the server's resolved recipe features.
+// Tasks the chosen model offers, and the one in use (falls back to the first available).
+export const tasks = computed(() => availableTasks(currentRecipe.value));
+export const currentTask = computed(() => tasks.value.find((t) => t.id === state.form.task) || tasks.value[0]);
+
+// What the chosen model accepts for the current task.
+export const inputSupport = computed(() => {
+    const features = currentRecipe.value?.effective_features || {};
+    const task = currentTask.value?.id;
+    return {
+        startFrame: task === "i2v" || task === "s2v" || task === "i2i" || (task === "v2v" && Boolean(features.init_image)),
+        startRequired: task === "i2v" || task === "s2v" || task === "i2i",
+        startLabel: task === "i2i" ? "Image to redraw" : task === "s2v" ? "Portrait (who speaks)" : task === "v2v" ? "Reference image" : "Start frame",
+        endFrame: task === "i2v" && Boolean(features.end_image),
+        refImages: (task === "edit" || task === "r2v") && Boolean(features.ref_images),
+        audio: task === "s2v" || (task === "r2v" && Boolean(features.ref_audios)),
+        control: task === "v2v",
+        strength: task === "i2i",
+        sound: producesAudio(currentRecipe.value, selectedFiles.value),
+    };
+});
+
+// Inputs the current task still needs before it can run.
+export const missingInputs = computed<string[]>(() => {
+    const support = inputSupport.value;
+    const inputs = state.inputs;
+    const missing: string[] = [];
+    if (support.startRequired && !inputs.startImage) missing.push(support.startLabel.toLowerCase());
+    if (currentTask.value?.id === "edit" && !inputs.refImages.length) missing.push("at least one image to edit");
+    if (currentTask.value?.id === "r2v" && !inputs.refImages.length && !inputs.audio) missing.push("a reference image or audio clip");
+    if (currentTask.value?.id === "s2v" && !inputs.audio) missing.push("a speech audio clip");
+    if (support.control && !inputs.control) missing.push("a control video");
+    return missing;
+});
+
 export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<string, unknown> } | null {
     const p = plan.value;
     const form = state.form;
-    if (!p.recipe || !form.prompt.trim() || missingFiles.value.length) return null;
+    if (!p.recipe || !form.prompt.trim() || missingFiles.value.length || missingInputs.value.length) return null;
     const usesVideoEndpoint = recipeIsVideo(p.recipe);
     const body: Record<string, unknown> = {
         prompt: form.prompt.trim(),
@@ -209,6 +262,14 @@ export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<stri
     if (form.steps != null) sample.sample_steps = form.steps;
     if (form.cfg != null) sample.guidance = { txt_cfg: form.cfg };
     if (Object.keys(sample).length) body.sample_params = sample;
+    const support = inputSupport.value;
+    const inputs = state.inputs;
+    if (support.startFrame && inputs.startImage) body.init_image = inputs.startImage;
+    if (support.endFrame && inputs.endImage) body.end_image = inputs.endImage;
+    if (support.refImages && inputs.refImages.length) body.ref_images = inputs.refImages.map((image) => image.data);
+    if (support.audio && inputs.audio) body.ref_audios = [inputs.audio.data];
+    if (support.control && inputs.control) body.control_frames = inputs.control.frames;
+    if (support.strength) body.strength = form.strength;
     if (usesVideoEndpoint) {
         body.video_frames = p.renderFrames;
         body.fps = p.fps;
@@ -335,6 +396,8 @@ export async function loadCatalog(refresh = false) {
         }
     } catch (error) {
         state.error = String((error as Error).message || error);
+    } finally {
+        state.loading.catalog = false;
     }
 }
 
@@ -345,6 +408,8 @@ export async function loadOutputs() {
         state.outputsEnabled = result.enabled;
     } catch {
         /* keep the previous list */
+    } finally {
+        state.loading.outputs = false;
     }
 }
 
@@ -353,6 +418,8 @@ export async function loadDownloads() {
         state.downloads = await api.downloads();
     } catch (error) {
         state.error = String((error as Error).message || error);
+    } finally {
+        state.loading.downloads = false;
     }
 }
 
@@ -425,6 +492,13 @@ export function startPolling() {
 // keeping the chosen model, shape, size and length.
 export function newCreation() {
     const form = state.form;
+    state.inputs.startImage = "";
+    state.inputs.startName = "";
+    state.inputs.endImage = "";
+    state.inputs.endName = "";
+    state.inputs.refImages = [];
+    state.inputs.audio = null;
+    state.inputs.control = null;
     form.prompt = "";
     form.negativePrompt = "";
     form.submittedPrompt = "";
@@ -465,6 +539,7 @@ export function reuse(output: OutputEntry) {
     }
     const frames = output.frame_count || output.video_frames || 1;
     form.mode = frames > 1 ? "video" : "image";
+    form.task = frames > 1 ? "t2v" : "t2i";
     if (frames > 1 && output.fps) form.seconds = Math.round((frames / output.fps) * 10) / 10;
     if (output.width && output.height) {
         const r = output.width / output.height;

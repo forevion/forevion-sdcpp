@@ -1707,6 +1707,10 @@ Output format behavior:
 - `webp` means animated WebP
 - `avi` means MJPG AVI
 - `webm` requires the server to be built with WebM support; otherwise the request returns `400`
+- when the model produces audio (it has an audio VAE) and `output_format` is not `webp`, the
+  server writes `avi` so the soundtrack is kept, because WebM output is silent. When the server
+  saves results (`--output-dir`), it also saves a silent `<name>-preview.webm` that browsers can
+  play; the saved item lists it as `preview_file` and `preview_url`, with `has_audio: true`
 
 ### Result Payload
 

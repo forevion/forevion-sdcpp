@@ -344,6 +344,33 @@ h3 {
     clip: rect(0 0 0 0);
 }
 
+/* Small inline spinner for buttons and loading rows. */
+.spin {
+    display: inline-block;
+    flex: none;
+    width: 15px;
+    height: 15px;
+    border: 2px solid currentColor;
+    border-right-color: transparent;
+    border-radius: 50%;
+    animation: spin-rotate 0.7s linear infinite;
+    vertical-align: -2px;
+}
+
+@keyframes spin-rotate {
+    to {
+        transform: rotate(360deg);
+    }
+}
+
+.loading-row {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 18px 4px;
+    color: var(--text-2);
+}
+
 /* DGL workspace (Scripts page) code colors */
 .dgl-workspace .keyword { color: #c4a7ff; }
 .dgl-workspace .string { color: #9fdfb0; }

@@ -115,6 +115,14 @@ static void update_job_progress(AsyncGenerationJob& job, const char* stage, cons
         const auto now = std::chrono::steady_clock::now();
         progress.stage_ms[progress.stage] += std::chrono::duration_cast<std::chrono::milliseconds>(now - progress.stage_started).count();
         progress.stage_started = now;
+        if (std::string(stage) != "sampling")
+            LOG_INFO("job %s: %s%s%s", job.id.c_str(), stage, *detail ? " " : "", detail);
+    }
+    // One line per sampling step, so a terminal shows progress (sd.cpp's own bar shows s/it).
+    if (std::string(stage) == "sampling" && total > 0 && completed > 0 && completed != progress.completed) {
+        const double seconds = job.started_at ? (unix_timestamp_now_ms() - job.started_at) / 1000.0 : 0.0;
+        LOG_INFO("job %s: sampling step %lld/%lld (%.0f s since start)", job.id.c_str(), static_cast<long long>(completed),
+                 static_cast<long long>(total), seconds);
     }
     progress.stage       = stage;
     progress.detail      = detail;
@@ -526,6 +534,17 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
     }
 
     update_job_progress(job, "encoding", "video");
+#ifdef SD_USE_WEBM
+    // WebM output is silent, so a clip with sound is written as AVI (PCM audio) plus a silent
+    // WebM preview that browsers can play.
+    if (generated_audio != nullptr && job.vid_gen.output_format != "webp") {
+        job.vid_gen.output_format = "avi";
+        std::vector<uint8_t> preview = create_video_from_sd_images_to_vector("webm", results.data(), num_results, output_fps,
+                                                                           job.vid_gen.output_compression, nullptr, "");
+        if (!preview.empty())
+            job.result_preview_b64 = base64_encode(preview);
+    }
+#endif
     std::vector<uint8_t> video_bytes = create_video_from_sd_images_to_vector(job.vid_gen.output_format,
                                                                              results.data(),
                                                                              num_results,
@@ -850,6 +869,7 @@ void async_job_worker(ServerRuntime& runtime) {
             job->status     = AsyncJobStatus::Generating;
             job->started_at = unix_timestamp_now_ms();
             update_job_progress(*job, "waiting");
+            LOG_INFO("job %s: started", job->id.c_str());
         }
 
         std::vector<std::string> output_images;
@@ -896,10 +916,12 @@ void async_job_worker(ServerRuntime& runtime) {
             finish_job_progress(*job);
             if (job->cancel_requested.load()) {
                 job->status        = AsyncJobStatus::Cancelled;
+                LOG_INFO("job %s: cancelled", job->id.c_str());
                 job->error_code    = "cancelled";
                 job->error_message = "job cancelled by client";
             } else if (ok) {
                 job->status                 = AsyncJobStatus::Completed;
+                LOG_INFO("job %s: finished in %.1f s", job->id.c_str(), (job->completed_at - job->started_at) / 1000.0);
                 job->result_images_b64      = std::move(output_images);
                 job->result_generation_info = std::move(output_info);
                 job->result_media_b64       = std::move(output_media_b64);
@@ -911,6 +933,7 @@ void async_job_worker(ServerRuntime& runtime) {
                 job->error_message.clear();
             } else {
                 job->status        = AsyncJobStatus::Failed;
+                LOG_ERROR("job %s: failed: %s", job->id.c_str(), error_message.empty() ? "unknown generation error" : error_message.c_str());
                 job->error_code    = error_code;
                 job->error_message = error_message.empty() ? "unknown generation error" : error_message;
                 job->result_images_b64.clear();
