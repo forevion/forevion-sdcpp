@@ -34,8 +34,10 @@ if(SD_SERVER_BUILD_FRONTEND AND EXISTS "${FRONTEND_DIR}")
             VERBATIM
         )
 
+        # BYPRODUCTS lets Ninja recompile main.cpp in the same build when the UI changed.
         add_custom_target(${TARGET}_frontend_header
             COMMAND "${PNPM_EXECUTABLE}" --ignore-workspace -C "${FRONTEND_DIR}" run build:header
+            BYPRODUCTS "${GENERATED_HTML_HEADER}"
             WORKING_DIRECTORY "${FRONTEND_DIR}"
             COMMENT "Generating gen_index_html.h"
             VERBATIM
@@ -80,6 +82,7 @@ add_executable(${TARGET}
     routes_dgl.cpp
     library.cpp
     downloads.cpp
+    model_manager.cpp
     routes_media.cpp
 )
 if(APPLE)

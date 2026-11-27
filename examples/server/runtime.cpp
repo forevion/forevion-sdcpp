@@ -305,6 +305,7 @@ ArgOptions SDSvrParams::get_options() {
         {"", "--serve-html-path", "path to HTML file to serve at root (optional)", 0, &serve_html_path},
         {"", "--dgl-dir", "Web UI script directory (default: dgl)", 0, &dgl_dir},
         {"", "--output-dir", "directory for finished images and videos shown in the Web UI history; \"none\" disables saving (default: outputs)", 0, &output_dir},
+        {"", "--catalog-url", "online model download catalog for the Models page; \"none\" uses only the built-in and local lists (default: the forevion-sdcpp master catalog)", 0, &catalog_url},
     };
 
     options.int_options = {
@@ -379,6 +380,8 @@ bool SDSvrParams::validate() {
     }
     if (output_dir == "none")
         output_dir.clear();
+    if (catalog_url == "none")
+        catalog_url.clear();
     if (dgl_dir.empty()) {
         LOG_ERROR("--dgl-dir requires a directory path");
         return false;
@@ -403,6 +406,7 @@ std::string SDSvrParams::to_string() const {
         << "  serve_html_path: \"" << serve_html_path << "\",\n"
         << "  dgl_dir: \"" << dgl_dir << "\",\n"
         << "  output_dir: \"" << output_dir << "\",\n"
+        << "  catalog_url: \"" << catalog_url << "\",\n"
         << "  api_keys: " << api_keys.size() << ",\n"
         << "  cors_origins: " << cors_origins.size() << ",\n"
         << "  media_view: " << std::boolalpha << media_view << ",\n"

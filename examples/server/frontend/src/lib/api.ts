@@ -1,5 +1,11 @@
 import type {
     CatalogError,
+    CatalogStatus,
+    CustomModelInfo,
+    CustomModelRequest,
+    ModelSlotDef,
+    PackageDefinition,
+    StorageInfo,
     DglJob,
     DownloadCatalog,
     Job,
@@ -42,6 +48,19 @@ export const api = {
     downloads: () => fetchJson<DownloadCatalog>("/sdcpp/v1/downloads", { cache: "no-store" }),
     startDownload: (id: string) => fetchJson<unknown>(`/sdcpp/v1/downloads/${id}`, post()),
     cancelDownload: (id: string) => fetchJson<unknown>(`/sdcpp/v1/downloads/${id}/cancel`, post()),
+    removeDownload: (id: string) => fetchJson<unknown>(`/sdcpp/v1/downloads/${id}`, { method: "DELETE" }),
+    deletePackageFiles: (id: string) => fetchJson<{ deleted: string[] }>(`/sdcpp/v1/downloads/${id}/files`, { method: "DELETE" }),
+    packageDefinition: (id: string) => fetchJson<PackageDefinition>(`/sdcpp/v1/downloads/${id}/definition`, { cache: "no-store" }),
+    savePackage: (pkg: Record<string, unknown>) => fetchJson<unknown>(`/sdcpp/v1/downloads/${pkg.id}`, { ...post(pkg), method: "PUT" }),
+    refreshCatalog: () => fetchJson<CatalogStatus>("/sdcpp/v1/download-catalog/refresh", post()),
+    addCustomModel: (body: CustomModelRequest) => fetchJson<CustomModelInfo>("/sdcpp/v1/download-catalog/custom", post(body)),
+    modelSlots: () => fetchJson<{ slots: ModelSlotDef[]; categories: string[] }>("/sdcpp/v1/model-slots"),
+    storage: () => fetchJson<StorageInfo>("/sdcpp/v1/storage", { cache: "no-store" }),
+    deleteModelFile: (id: string) => fetchJson<unknown>(`/sdcpp/v1/model-files/${id.split("/").map(encodeURIComponent).join("/")}`, { method: "DELETE" }),
+    saveRecipe: (recipe: Record<string, unknown>) =>
+        fetchJson<{ saved: boolean; errors: CatalogError[] }>(`/sdcpp/v1/recipes/${recipe.id}`, { ...post(recipe), method: "PUT" }),
+    deleteRecipe: (id: string) => fetchJson<unknown>(`/sdcpp/v1/recipes/${id}`, { method: "DELETE" }),
+    capabilities: () => fetchJson<{ samplers: string[]; schedulers: string[] }>("/sdcpp/v1/capabilities"),
 };
 
 const dglPath = "/sdcpp/v1/dgl";

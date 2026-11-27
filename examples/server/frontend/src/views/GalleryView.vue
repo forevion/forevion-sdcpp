@@ -20,6 +20,7 @@ import {
     state,
     submit,
 } from "../lib/store";
+import { confirmDanger } from "../lib/confirm";
 import type { OutputEntry } from "../lib/types";
 
 const emit = defineEmits<{ (e: "open-create"): void }>();
@@ -27,7 +28,6 @@ const emit = defineEmits<{ (e: "open-create"): void }>();
 const filter = ref<"all" | "video" | "image">("all");
 const search = ref("");
 const open = ref<OutputEntry | null>(null);
-const confirmDelete = ref(false);
 const submitting = ref(false);
 
 const items = computed(() => {
@@ -65,9 +65,10 @@ function reuseAndEdit(output: OutputEntry) {
 }
 
 async function remove(output: OutputEntry) {
+    const ok = await confirmDanger("Delete this result?", `${output.file} will be removed from the gallery and from disk. This cannot be undone.`, "Delete");
+    if (!ok) return;
     await deleteOutput(output);
     open.value = null;
-    confirmDelete.value = false;
 }
 
 function step(delta: number) {
@@ -76,7 +77,6 @@ function step(delta: number) {
     const next = items.value[index + delta];
     if (next) {
         open.value = next;
-        confirmDelete.value = false;
     }
 }
 
@@ -186,8 +186,7 @@ function when(ms: number) {
                     <div class="lb-actions">
                         <button class="btn" type="button" @click="reuseAndEdit(open)"><Icon name="reuse" :size="16" />Reuse settings</button>
                         <a class="btn-secondary" :href="open.url" :download="open.file"><Icon name="download" :size="16" />Save</a>
-                        <button v-if="!confirmDelete" class="btn-ghost btn-danger" type="button" @click="confirmDelete = true"><Icon name="trash" :size="16" />Delete</button>
-                        <button v-else class="btn-secondary btn-danger" type="button" @click="remove(open)">Delete permanently?</button>
+                        <button class="btn-ghost btn-danger" type="button" @click="remove(open)"><Icon name="trash" :size="16" />Delete</button>
                     </div>
                 </aside>
             </div>

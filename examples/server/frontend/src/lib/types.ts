@@ -42,6 +42,7 @@ export interface Recipe {
     video_constraints?: VideoConstraints;
     required_any?: string[][];
     source: string;
+    file?: string;
     models?: Record<string, string>;
     defaults?: RecipeDefaults;
     effective_features?: Record<string, boolean>;
@@ -121,7 +122,22 @@ export interface DownloadComponent {
     packed_from?: string;
 }
 
+export interface ModelGuide {
+    notes?: string[];
+    inputs?: Record<string, string>;
+    alternatives?: Record<string, string>;
+    settings?: {
+        size_multiple?: number;
+        video_constraints?: VideoConstraints;
+        defaults?: RecipeDefaults;
+        features?: string[];
+        disabled_features?: string[];
+        model_url?: string;
+    };
+}
+
 export interface DownloadPackage {
+    guide?: ModelGuide;
     id: string;
     name: string;
     group?: string;
@@ -130,6 +146,7 @@ export interface DownloadPackage {
     homepage?: string;
     media?: string[];
     source: string;
+    overrides?: "builtin" | "online";
     installed: boolean;
     size: number;
     missing_bytes: number;
@@ -145,11 +162,85 @@ export interface DownloadPackage {
     };
 }
 
+export interface CatalogStatus {
+    state: "checking" | "ok" | "error" | "disabled";
+    url?: string;
+    error?: string;
+    checked?: number;
+}
+
 export interface DownloadCatalog {
     packages: DownloadPackage[];
     errors: CatalogError[];
     ram_gb: number;
     model_root: string;
+    catalog: CatalogStatus;
+}
+
+export interface PackageFile {
+    path: string;
+    url: string;
+    size?: number;
+    sha256?: string;
+}
+
+export interface PackageDefinition {
+    package: {
+        id: string;
+        name: string;
+        group?: string;
+        description?: string;
+        license?: string;
+        homepage?: string;
+        media?: string[];
+        files?: PackageFile[];
+        convert?: unknown[];
+        recipes?: unknown[];
+        [key: string]: unknown;
+    };
+    source: string;
+    overrides: "builtin" | "online" | null;
+    editable: boolean;
+}
+
+export interface CustomModelRequest {
+    url: string;
+    category: string;
+    filename?: string;
+    name?: string;
+    dry_run?: boolean;
+    start?: boolean;
+}
+
+export interface CustomModelInfo {
+    id?: string;
+    url: string;
+    path: string;
+    size: number;
+    sha256: string;
+    homepage: string;
+    exists: boolean;
+}
+
+export interface ModelSlotDef {
+    id: string;
+    label: string;
+    categories: string[];
+}
+
+export interface StorageFile {
+    id: string;
+    name: string;
+    category: string;
+    size: number;
+    modified: number;
+    used_by: { id: string; name: string }[];
+    loaded: boolean;
+}
+
+export interface StorageInfo {
+    files: StorageFile[];
+    roots: { id: string; path: string; free_bytes: number; total_bytes: number }[];
 }
 
 export interface DglOutput {

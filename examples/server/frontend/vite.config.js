@@ -11,10 +11,16 @@ module.exports = defineConfig({
         viteSingleFile(),
     ],
     server: {
-        proxy: {
-            "/sdcpp": server,
-            "/v1": server,
-            "/sdapi": server,
-        },
+        // The server only accepts writes from its own origin, so the dev proxy presents itself as the server.
+        proxy: Object.fromEntries(
+            ["/sdcpp", "/v1", "/sdapi"].map((path) => [
+                path,
+                {
+                    target: server,
+                    changeOrigin: true,
+                    configure: (proxy) => proxy.on("proxyReq", (request) => request.setHeader("origin", server)),
+                },
+            ]),
+        ),
     },
 });

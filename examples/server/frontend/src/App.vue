@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from "vue";
 
+import ConfirmDialog from "./components/ConfirmDialog.vue";
 import DglWorkspace from "./components/DglWorkspace.vue";
 import Icon from "./components/Icon.vue";
 import QueuePanel from "./components/QueuePanel.vue";
@@ -80,6 +81,7 @@ onMounted(async () => {
         </main>
 
         <QueuePanel v-if="state.queueOpen" @close="state.queueOpen = false" />
+        <ConfirmDialog />
     </div>
 </template>
 

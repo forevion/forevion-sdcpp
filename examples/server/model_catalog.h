@@ -65,6 +65,13 @@ json model_status(const ServerRuntime& runtime);
 void initialize_server_models(ServerRuntime& runtime);
 
 json resolve_recipe_features(const json& recipe);
+// Category directories under a model root ("diffusion_models", "vae", ..., "loras").
+std::set<std::string> model_categories();
+// Slot ids with their default labels and search categories, for recipe editors.
+json model_slot_definitions();
+// Validates a recipe sent by a client and returns it in user-file form (response-only fields
+// removed). Throws std::exception with a message on invalid recipes.
+json prepare_user_recipe(json recipe);
 json model_generation_features(const ServerRuntime& runtime);
 
 ServerModelSelection resolve_model_selection(ServerRuntime& runtime, const json& body, SDMode mode);

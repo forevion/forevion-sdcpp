@@ -20,6 +20,8 @@ export interface CreateForm {
     cfg: number | null;
     fps: number | null;
     submittedPrompt: string;
+    // Per-model file choices that replace a preset's defaults; "" means "no file" for a slot.
+    files: Record<string, Record<string, string>>;
 }
 
 const FORM_KEY = "sdcpp-studio-form";
@@ -39,6 +41,7 @@ function loadForm(): CreateForm {
         cfg: null,
         fps: null,
         submittedPrompt: "",
+        files: {},
     };
     try {
         const saved = JSON.parse(localStorage.getItem(FORM_KEY) || "null");
@@ -102,8 +105,52 @@ export const readyRecipes = computed(() =>
 );
 
 export const currentRecipe = computed(
-    () => readyRecipes.value.find((r) => r.id === state.form.recipeId) || readyRecipes.value[0],
+    () => state.recipes.find((r) => r.id === state.form.recipeId) || readyRecipes.value[0],
 );
+
+// The files the next job will use: the preset's defaults overlaid with the user's choices.
+export const selectedFiles = computed<Record<string, string>>(() => {
+    const recipe = currentRecipe.value;
+    if (!recipe) return {};
+    const chosen = state.form.files[recipe.id] || {};
+    const result: Record<string, string> = {};
+    for (const slot of recipe.slots) {
+        const value = slot.id in chosen ? chosen[slot.id] : recipe.models?.[slot.id] || "";
+        result[slot.id] = value && fileIds.value.has(value) ? value : "";
+    }
+    return result;
+});
+
+// Human-readable reasons the current selection cannot run yet.
+export const missingFiles = computed<string[]>(() => {
+    const recipe = currentRecipe.value;
+    if (!recipe) return [];
+    const files = selectedFiles.value;
+    const missing = recipe.slots.filter((s) => s.required && !files[s.id]).map((s) => s.label || s.id);
+    for (const group of recipe.required_any || [])
+        if (!group.some((id) => files[id]))
+            missing.push(group.map((id) => recipe.slots.find((s) => s.id === id)?.label || id).join(" or "));
+    return missing;
+});
+
+export function chooseFile(slot: string, file: string) {
+    const recipe = currentRecipe.value;
+    if (!recipe) return;
+    state.form.files = { ...state.form.files, [recipe.id]: { ...(state.form.files[recipe.id] || {}), [slot]: file } };
+}
+
+export function resetFileChoices() {
+    const recipe = currentRecipe.value;
+    if (!recipe) return;
+    const next = { ...state.form.files };
+    delete next[recipe.id];
+    state.form.files = next;
+}
+
+export const hasFileChanges = computed(() => {
+    const recipe = currentRecipe.value;
+    return Boolean(recipe && Object.keys(state.form.files[recipe.id] || {}).length);
+});
 
 // ---------- geometry ----------
 
@@ -146,7 +193,7 @@ export const plan = computed(() => {
 export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<string, unknown> } | null {
     const p = plan.value;
     const form = state.form;
-    if (!p.recipe || !form.prompt.trim()) return null;
+    if (!p.recipe || !form.prompt.trim() || missingFiles.value.length) return null;
     const usesVideoEndpoint = recipeIsVideo(p.recipe);
     const body: Record<string, unknown> = {
         prompt: form.prompt.trim(),
@@ -154,7 +201,7 @@ export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<stri
         width: p.width,
         height: p.height,
         seed: form.lockSeed ? form.seed : -1,
-        model: { recipe: p.recipe.id },
+        model: { recipe: p.recipe.id, models: { ...selectedFiles.value } },
         preview: "proj",
         preview_interval: 1,
     };
@@ -282,7 +329,7 @@ export async function loadCatalog(refresh = false) {
         const [recipes, files] = await Promise.all([api.recipes(), api.files()]);
         state.recipes = recipes.recipes;
         state.files = files.files;
-        if (!readyRecipes.value.some((r) => r.id === state.form.recipeId) && readyRecipes.value.length) {
+        if (!state.recipes.some((r) => r.id === state.form.recipeId) && readyRecipes.value.length) {
             const preferred = readyRecipes.value.find((r) => /kandinsky6.*fast/.test(r.id)) || readyRecipes.value[0];
             state.form.recipeId = preferred.id;
         }
@@ -412,7 +459,10 @@ export function reuse(output: OutputEntry) {
     form.prompt = output.prompt || "";
     form.submittedPrompt = "";
     form.negativePrompt = output.negative_prompt || "";
-    if (output.recipe && state.recipes.some((r) => r.id === output.recipe)) form.recipeId = output.recipe;
+    if (output.recipe && state.recipes.some((r) => r.id === output.recipe)) {
+        form.recipeId = output.recipe;
+        if (output.models && Object.keys(output.models).length) form.files = { ...form.files, [output.recipe]: { ...output.models } };
+    }
     const frames = output.frame_count || output.video_frames || 1;
     form.mode = frames > 1 ? "video" : "image";
     if (frames > 1 && output.fps) form.seconds = Math.round((frames / output.fps) * 10) / 10;
