@@ -68,6 +68,7 @@ add_executable(${TARGET}
     ../common/media_io.cpp
     ../common/media_metadata.cpp
     main.cpp
+    server_access.cpp
     runtime.cpp
     model_catalog.cpp
     routes_models.cpp
@@ -79,6 +80,7 @@ add_executable(${TARGET}
     routes_dgl.cpp
     library.cpp
     downloads.cpp
+    routes_media.cpp
 )
 if(APPLE)
     sd_set_macos_rpaths(${TARGET})
