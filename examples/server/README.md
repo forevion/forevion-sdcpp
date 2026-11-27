@@ -4,7 +4,7 @@
 and HTTP APIs. Download or build the server before starting; see the
 [build guide](../../docs/build.md) and [frontend build instructions](#build-with-frontend).
 
-- [Web UI](#web-ui): start the server, select a model, and generate.
+- [Web UI](#web-ui): set up on Linux with one script, start the server, get models, and generate.
 - [Model management](#model-management): model directories, recipes, and startup models.
 - [Server configuration](#server-configuration): launcher settings, network, logging, and help.
 - [API](#api): native and compatibility endpoints.
@@ -21,6 +21,39 @@ in generation metadata. Output formats, queue limits and listen addresses keep
 server-local defaults.
 
 ## Web UI
+
+### Quick start on Linux
+
+On Debian/Ubuntu-based systems (for example Zorin OS), one script sets up and starts
+everything. Put it in an empty folder and run it:
+
+```sh
+mkdir -p ~/sdcpp && cd ~/sdcpp
+curl -fLO https://raw.githubusercontent.com/forevion/forevion-sdcpp/develop/scripts/setup-sdcpp.sh
+chmod +x setup-sdcpp.sh
+./setup-sdcpp.sh
+```
+
+The first run installs any missing build tools with apt (Git, CMake, Ninja, the
+compiler and curl; it asks for your password), downloads Node.js and pnpm into
+`tools/`, clones the source, builds `sd-server` for this CPU with the Web UI, starts
+it and opens the browser. Later runs check the tools, rebuild only when the source
+changed, and start the server. Everything stays in that folder:
+
+| Folder | Contents |
+| --- | --- |
+| `stable-diffusion.cpp/` | Source |
+| `build/` | Build output (`build/bin/sd-server`, `sd-cli`) and `build.log` |
+| `tools/` | Node.js and pnpm used for the Web UI build |
+| `models/` | Models downloaded from the Models page |
+| `outputs/` | Saved images and videos |
+
+Options: `--update` pulls the latest source and rebuilds, `--rebuild` forces a
+build, `--build-only` skips starting, `--port N` changes the port, `--lan` lets other
+devices on the network connect, `--threads N` overrides the thread count and
+`--no-browser` skips opening the browser. Run with `--help` for the full list. Run
+from inside a checkout (`scripts/setup-sdcpp.sh`), it builds that checkout into
+`build-linux/` and uses its `models/` and `output/` folders.
 
 ### Start the server
 
@@ -47,7 +80,7 @@ To start the executable directly instead, run from the build directory:
 **Windows (PowerShell)**
 
 ```powershell
-.\bin\Release\sd-server.exe --model-dir ..\models
+.in\Release\sd-server.exe --model-dir ..\models
 ```
 
 **Linux/macOS**
@@ -61,72 +94,44 @@ for another build configuration or an extracted release archive. Open
 <http://127.0.0.1:1234/> after the server starts, and keep the server running
 while using the browser.
 
-### Select a model
+### Get models
 
-1. Download the weights and required components listed in the matching
-   [model guide](../../docs/models/README.md). Put them in the category folders
-   under `models/`, such as `checkpoints/`, `diffusion_models/`, `text_encoders/`,
-   `tokenizers/`, and `vae/`. See [Model directories](#model-directories) below.
-2. Click **Model** below the prompt to open model selection.
-3. Choose the matching **Recipe**. Keep **Apply recipe defaults** enabled to
-   start with that recipe's generation settings.
-4. Select each component in its named field: for example, **Diffusion model**,
-   the model-specific text encoder field, and **VAE**. Required fields have an
-   asterisk. A VAE/TAE requirement needs one compatible decoder. Match all files
-   to the chosen checkpoint and variant, as described in its model guide.
-5. If a file is missing from a dropdown, check its category folder and click
-   **Refresh files & recipes**. Selectors support searching by name or path.
+Open **Models** and click **Download** on a package. Progress, speed and time left
+show on the card; **Stop** keeps the downloaded part so the next **Resume** continues
+from there. When a package finishes, its recipes are installed and its models appear
+under **Create**. See [Model downloads](#model-downloads) for adding packages.
 
-Recipe and component selectors support searching by name or relative file ID.
-Use the arrow keys and Enter to select, or Escape to cancel a search. With
-**Apply recipe defaults** enabled, selecting a recipe immediately applies its
-declared generation defaults while preserving prompts, input images and fields
-not specified by the recipe. Disable it to keep your current parameters when
-switching recipes. This preference defaults to enabled and is saved locally.
-Recipes declaring `video_frames` also switch the form to Video Generation;
-other recipes switch to Image Generation. Select the required components to
-enable **Generate**. The job loads any needed components and reports the
-loading progress alongside sampling and output encoding.
+Models placed by hand also work: put them in the category folders under `models/`
+(see [Model directories](#model-directories)) and add a user recipe whose `models`
+field names the default files. **Rescan folder** on the Models page picks up changes.
 
-### Generate an image or video
+### Create images and videos
 
-1. Enter a prompt, for example `a lovely cat` for an image model.
-2. Open **Sample & Guidance** to set **Method**, **Scheduler**, **Steps**, and
-   **CFG Scale** when the model guide specifies values different from the recipe
-   defaults. Set the output dimensions in **Aspect Ratio & Resolution**.
-3. Supply inputs for the chosen task. Editing recipes use **Reference Images**;
-   IP-Adapter uses **IP-Adapter Image**. For image-to-video, use video generation
-   and upload a **Start Frame**; add an **End Frame** only for a compatible
-   first/last-frame workflow. Set the video length and FPS as required by the model.
-4. Click **Generate**. Wait for denoising, decoding, and output encoding to
-   finish, then preview or save the result. Sampling reaching 100% does not mean
-   decoding has finished.
+1. Open **Create** and pick a model. Only models whose recipe files are all present
+   are listed.
+2. Choose **Video** or **Image**, type a prompt, and pick **Shape** (16:9, 4:3, 1:1,
+   9:16), **Size** (Small or Normal, based on the model's default resolution) and, for
+   video, **Length** in seconds.
+3. Click **Generate** (or press Ctrl+Enter). While a job runs the preview shows the
+   current stage, step, elapsed time and time left; **Stop** cancels it. More jobs can
+   be added while one runs; they wait in the **Queue**.
+4. The result appears in the preview with **Reuse** (copy its settings back into the
+   form), **Save**, **Delete** and close buttons, and in the **Recent** strip.
 
-The generation status bar shows the current stage and elapsed time even when
-Preview Mode is `none`. During sampling it shows completed steps for the current
-pass; prompt encoding and VAE decoding show an activity indicator when their
-total work is unknown. The canvas keeps the submitted output aspect ratio, and
-stage changes keep the same layout. Editing the next request's resolution does
-not resize the current preview or result.
+**Advanced** holds the negative prompt, steps, CFG, FPS and a fixed seed; empty fields
+use the model's defaults. **New** clears the prompt, these overrides and the preview.
 
-Settings will offer **Notify me when generation finishes** (upcoming; requires
-a frontend update). When enabled, the UI requests browser notification
-permission and shows a notification when a generation job completes, fails, or
-is cancelled, so you do not need to watch the tab while waiting. The
-preference is saved locally. Notifications require granting browser
-notification permission; if permission was previously denied, reset it in the
-browser's site settings for this site before turning the setting on.
+The **Gallery** lists every saved result with search and Video/Image filters. Its
+prompt bar at the bottom starts a job with the current Create settings, and running
+jobs show as placeholder tiles. Click a tile to view it full size with its settings,
+reuse them, save the file or delete it.
 
-### LoRAs
-
-To apply a LoRA, open **LoRA**, select a compatible file, and set its
-**Strength**. Place files under `models/loras/` or `models/Lora/`. Browser
-requests use this selector; prompt tags such as `<lora:name:1>` are CLI syntax
-and are not parsed by the native server API.
+The new UI does not yet offer LoRAs, start/end frames, reference images or manual
+component selection. Use the native API or DGL scripts for those.
 
 ### DGL editor
 
-Open the Web UI using the local server address and select **DGL** in the header.
+Open the Web UI using the local server address and select **Scripts** in the sidebar.
 Select a saved script or choose **New**. **Duplicate** saves a copy of the
 current editor text under a new name. Edit **File name** before saving to save
 under a different name. **Run** submits the editor text to the generation queue,
