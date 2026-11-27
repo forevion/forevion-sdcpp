@@ -16,6 +16,7 @@
 #include "model/diffusion/model.hpp"
 #include "model/vae/auto_encoder_kl.hpp"
 #include "model/vae/hunyuan_vae.hpp"
+#include "model/vae/hunyuan_video1_vae.hpp"
 #include "model/vae/ltx_audio_vae.hpp"
 #include "model/vae/ltx_vae.hpp"
 #include "model/vae/mage_vae.hpp"
@@ -155,6 +156,12 @@ namespace sd::dgl::models::component_builders {
                                                                         false,
                                                                         vae_version,
                                                                         weight_manager);
+            } else if (find_model_traits(vae_version)->vae_kind == ModelVAEKind::HUNYUAN_VIDEO1) {
+                return std::make_shared<HunyuanVideo1VAE::HunyuanVideo1VAERunner>(ctx.backends.runtime_backend(SDBackendModule::VAE),
+                                                                                  tensor_storage_map,
+                                                                                  "first_stage_model",
+                                                                                  vae_version,
+                                                                                  weight_manager);
             } else if (find_model_traits(vae_version)->vae_kind == ModelVAEKind::WAN) {
                 return std::make_shared<WAN::WanVAERunner>(ctx.backends.runtime_backend(SDBackendModule::VAE),
                                                            tensor_storage_map,

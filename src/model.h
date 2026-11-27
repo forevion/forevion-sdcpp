@@ -85,7 +85,8 @@ enum class ModelVAEKind { KL,
                           HUNYUAN,
                           LTXAV,
                           MINIMAX_H3,
-                          MAGE };
+                          MAGE,
+                          HUNYUAN_VIDEO1 };
 
 struct ModelTraits {
     bool is_dit                    = false;

@@ -29,6 +29,7 @@ const std::vector<ModelDefinition>& kandinsky6_definitions() {
         definition.id                               = "kandinsky6";
         definition.traits.is_dit                    = true;
         definition.traits.supports_video_generation = true;
+        definition.traits.vae_kind                  = ModelVAEKind::HUNYUAN_VIDEO1;
         definition.traits.video_tae                 = true;
         definition.sampling                         = {FLOW_PRED, 5.f};
         definition.sampling.default_sample_method   = EULER_SAMPLE_METHOD;
