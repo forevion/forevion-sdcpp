@@ -1828,6 +1828,15 @@ std::string convert_tensor_name(std::string name, SDVersion version) {
     }
 
     replace_with_prefix_map(name, prefix_map);
+    // Diffusers pipelines (e.g. Kandinsky 6) save CLIPTextModel without the text_model wrapper.
+    for (const char* clip_prefix : {"text_encoders.clip_l.transformer.", "text_encoders.clip_g.transformer."}) {
+        if (starts_with(name, clip_prefix)) {
+            const std::string rest = name.substr(strlen(clip_prefix));
+            if (starts_with(rest, "embeddings.") || starts_with(rest, "encoder.") || starts_with(rest, "final_layer_norm.")) {
+                name = std::string(clip_prefix) + "text_model." + rest;
+            }
+        }
+    }
     name = convert_connector_name(std::move(name), version);
 
     if (sd_version_is_ltxav(version)) {
