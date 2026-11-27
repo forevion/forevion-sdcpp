@@ -19,6 +19,7 @@ export interface CreateForm {
     steps: number | null;
     cfg: number | null;
     fps: number | null;
+    submittedPrompt: string;
 }
 
 const FORM_KEY = "sdcpp-studio-form";
@@ -37,6 +38,7 @@ function loadForm(): CreateForm {
         steps: null,
         cfg: null,
         fps: null,
+        submittedPrompt: "",
     };
     try {
         const saved = JSON.parse(localStorage.getItem(FORM_KEY) || "null");
@@ -57,6 +59,7 @@ export const state = reactive({
     form: loadForm(),
     error: "",
     lastCompleted: null as OutputEntry | null,
+    createSelected: null as OutputEntry | null,
     queueOpen: false,
 });
 
@@ -311,6 +314,7 @@ export async function submit(): Promise<string | null> {
     if (!request) return null;
     try {
         const job = await api.submit(request.kind, request.body);
+        state.form.submittedPrompt = state.form.prompt;
         state.error = "";
         await pollJobs();
         return job.id;
@@ -370,9 +374,43 @@ export function startPolling() {
     tick();
 }
 
+// Starts a fresh Create page: clears the prompt, per-run overrides and the shown result,
+// keeping the chosen model, shape, size and length.
+export function newCreation() {
+    const form = state.form;
+    form.prompt = "";
+    form.negativePrompt = "";
+    form.submittedPrompt = "";
+    form.lockSeed = false;
+    form.steps = null;
+    form.cfg = null;
+    form.fps = null;
+    state.lastCompleted = null;
+    state.createSelected = null;
+    state.error = "";
+}
+
+// Entering Create clears it only when its prompt was already generated, so unsent drafts survive.
+export function enterCreate() {
+    const form = state.form;
+    if (!form.prompt.trim() || form.prompt === form.submittedPrompt) newCreation();
+    else {
+        state.lastCompleted = null;
+        state.createSelected = null;
+    }
+}
+
+export async function deleteOutput(output: OutputEntry) {
+    await api.deleteOutput(output.file);
+    if (state.lastCompleted?.file === output.file) state.lastCompleted = null;
+    if (state.createSelected?.file === output.file) state.createSelected = null;
+    await loadOutputs();
+}
+
 export function reuse(output: OutputEntry) {
     const form = state.form;
     form.prompt = output.prompt || "";
+    form.submittedPrompt = "";
     form.negativePrompt = output.negative_prompt || "";
     if (output.recipe && state.recipes.some((r) => r.id === output.recipe)) form.recipeId = output.recipe;
     const frames = output.frame_count || output.video_frames || 1;

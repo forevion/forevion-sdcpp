@@ -7,9 +7,11 @@ import {
     activeJobs,
     cancel,
     currentRecipe,
+    deleteOutput,
     estimateTotalSeconds,
     eta,
     formatDuration,
+    newCreation,
     plan,
     readyRecipes,
     recipeIsVideo,
@@ -27,7 +29,7 @@ const emit = defineEmits<{ (e: "open-models"): void; (e: "open-gallery"): void }
 const form = state.form;
 const aspects: Aspect[] = ["16:9", "4:3", "1:1", "9:16"];
 const submitting = ref(false);
-const selected = ref<OutputEntry | null>(null);
+const confirmDelete = ref(false);
 
 const isVideoModel = computed(() => recipeIsVideo(currentRecipe.value));
 watch(isVideoModel, (video) => {
@@ -52,13 +54,13 @@ const progressRatio = computed(() => {
     return p && p.total ? Math.min(1, (p.completed || 0) / p.total) : null;
 });
 const preview = computed(() => (state.activeJob?.preview ? `data:image/png;base64,${state.activeJob.preview.b64_json}` : ""));
-const shown = computed(() => selected.value || state.lastCompleted || state.outputs[0] || null);
+const shown = computed(() => state.createSelected || state.lastCompleted || null);
 const recent = computed(() => state.outputs.slice(0, 14));
 
 watch(
     () => state.lastCompleted,
     () => {
-        selected.value = null;
+        state.createSelected = null;
     },
 );
 
@@ -84,6 +86,16 @@ function randomizeSeed() {
     form.lockSeed = true;
 }
 
+watch(shown, () => {
+    confirmDelete.value = false;
+});
+
+async function removeShown() {
+    if (!shown.value) return;
+    await deleteOutput(shown.value);
+    confirmDelete.value = false;
+}
+
 function resetAdvanced() {
     form.steps = null;
     form.cfg = null;
@@ -99,6 +111,7 @@ function resetAdvanced() {
             <header class="form-head">
                 <h1>Create</h1>
                 <span class="faint">Ctrl + Enter to generate</span>
+                <button class="btn-secondary new-btn" type="button" title="Clear the prompt and preview" @click="newCreation"><Icon name="create" :size="16" />New</button>
             </header>
 
             <div v-if="!readyRecipes.length" class="panel no-models">
@@ -253,6 +266,9 @@ function resetAdvanced() {
                             <span class="spacer" />
                             <button class="btn-ghost" type="button" @click="reuse(shown)"><Icon name="reuse" :size="16" />Reuse</button>
                             <a class="btn-ghost" :href="shown.url" :download="shown.file"><Icon name="download" :size="16" />Save</a>
+                            <button v-if="!confirmDelete" class="btn-ghost btn-danger" type="button" @click="confirmDelete = true"><Icon name="trash" :size="16" />Delete</button>
+                            <button v-else class="btn-secondary btn-danger" type="button" @click="removeShown">Delete permanently?</button>
+                            <button class="btn-ghost icon-btn" type="button" title="Close preview" aria-label="Close preview" @click="state.createSelected = null; state.lastCompleted = null"><Icon name="close" :size="16" /></button>
                         </div>
                     </div>
                 </template>
@@ -275,7 +291,7 @@ function resetAdvanced() {
                         class="thumb"
                         :aria-pressed="shown?.file === item.file"
                         :title="item.prompt"
-                        @click="selected = item"
+                        @click="state.createSelected = item"
                     >
                         <MediaView :output="item" thumb />
                     </button>
@@ -303,8 +319,18 @@ function resetAdvanced() {
 
 .form-head {
     display: flex;
-    align-items: baseline;
-    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+}
+
+.form-head .faint {
+    margin-left: auto;
+}
+
+.form-head .new-btn {
+    min-height: 30px;
+    padding: 0 10px;
+    font-size: 13px;
 }
 
 .form-head .faint {

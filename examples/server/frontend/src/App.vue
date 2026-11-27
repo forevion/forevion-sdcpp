@@ -4,7 +4,7 @@ import { computed, onMounted, ref } from "vue";
 import DglWorkspace from "./components/DglWorkspace.vue";
 import Icon from "./components/Icon.vue";
 import QueuePanel from "./components/QueuePanel.vue";
-import { activeJobs, loadCatalog, loadDownloads, loadOutputs, startPolling, state } from "./lib/store";
+import { activeJobs, enterCreate, loadCatalog, loadDownloads, loadOutputs, startPolling, state } from "./lib/store";
 import CreateView from "./views/CreateView.vue";
 import GalleryView from "./views/GalleryView.vue";
 import ModelsView from "./views/ModelsView.vue";
@@ -24,6 +24,7 @@ function initialPage(): Page {
 
 const page = ref<Page>(initialPage());
 function go(next: Page) {
+    if (next === "create") enterCreate();
     page.value = next;
     history.replaceState(null, "", `#${next}`);
     if (next === "models") loadDownloads();
@@ -36,9 +37,9 @@ const downloading = computed(
 );
 
 onMounted(async () => {
+    if (page.value === "create") enterCreate();
     await Promise.all([loadCatalog(), loadOutputs(), loadDownloads()]);
     startPolling();
-    if (page.value === "create" && !state.recipes.length) return;
 });
 </script>
 
