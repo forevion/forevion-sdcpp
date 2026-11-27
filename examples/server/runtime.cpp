@@ -304,6 +304,7 @@ ArgOptions SDSvrParams::get_options() {
         {"-l", "--listen-ip", "server listen ip (default: 127.0.0.1)", 0, &listen_ip},
         {"", "--serve-html-path", "path to HTML file to serve at root (optional)", 0, &serve_html_path},
         {"", "--dgl-dir", "Web UI script directory (default: dgl)", 0, &dgl_dir},
+        {"", "--output-dir", "directory for finished images and videos shown in the Web UI history; \"none\" disables saving (default: outputs)", 0, &output_dir},
     };
 
     options.int_options = {
@@ -375,6 +376,8 @@ bool SDSvrParams::validate() {
         LOG_ERROR("error: serve_html_path file does not exist: %s", serve_html_path.c_str());
         return false;
     }
+    if (output_dir == "none")
+        output_dir.clear();
     if (dgl_dir.empty()) {
         LOG_ERROR("--dgl-dir requires a directory path");
         return false;
@@ -401,6 +404,7 @@ std::string SDSvrParams::to_string() const {
         << "  weight_residency_ttl: " << weight_residency_ttl << ",\n"
         << "  serve_html_path: \"" << serve_html_path << "\",\n"
         << "  dgl_dir: \"" << dgl_dir << "\",\n"
+        << "  output_dir: \"" << output_dir << "\",\n"
         << "}";
     return oss.str();
 }

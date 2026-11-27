@@ -500,11 +500,9 @@ pnpm -v
 ```
 
 Run the following commands from the repository root. They work in PowerShell
-and POSIX shells. Initialize the frontend submodule if it is missing, then
-configure and build with CMake:
+and POSIX shells:
 
 ```sh
-git submodule update --init examples/server/frontend
 cmake -S . -B build -DSD_SERVER_BUILD_FRONTEND=ON
 cmake --build build --config Release
 ```
@@ -535,9 +533,48 @@ directory:
 
 This lets you develop or test the frontend without rebuilding the server binary.
 
-### Frontend repository
+### Frontend source
 
-The Web UI is maintained in the separate
-[sdcpp-webui repository](https://github.com/leejet/sdcpp-webui), included here as
-a Git submodule. Submit UI and frontend logic changes to that repository.
-Changes appear here when the submodule is updated.
+The Web UI ("sd.cpp Studio") lives in `examples/server/frontend` (Vue 3 + Vite). It has
+four pages and a queue drawer:
+
+| Page | What it does |
+| --- | --- |
+| Create | Pick a ready model, type a prompt, choose Video or Image, shape, size and length; Advanced holds steps, CFG, FPS, seed and the negative prompt |
+| Gallery | Saved results with a prompt bar at the bottom; open an item to reuse its settings, save or delete it |
+| Models | Download packages with progress, speed, cancel and resume |
+| Scripts | DGL script editor |
+
+The queue drawer lists running and waiting jobs with progress and an estimate of the time
+left. Estimates are learned from the stage timings stored with saved results, so they
+appear after the first result of each model.
+
+A model appears under Create when one of its recipes names default files (`models`) that
+exist. Image mode on a video model makes one frame; models whose single frames are noisy
+(Kandinsky 6) render a short clip and keep its middle frame (`still_frame`).
+
+For live UI development, run `pnpm dev` in `examples/server/frontend`; it proxies the API
+to the server in `SDCPP_SERVER` (default `http://127.0.0.1:1234`).
+
+### Saved results
+
+Finished image and video jobs are written to `--output-dir` (default `outputs`), each file
+with a `.json` sidecar holding the prompt, settings, seed and stage timings. The Gallery
+reads this folder. `--output-dir none` turns saving off.
+
+### Model downloads
+
+The Models page installs packages from a catalog: the built-in `downloads.json` plus any
+`<model-dir>/downloads/*.json` files in the first model root (same format; a package with
+the same `id` replaces the built-in one). Each package lists files with their URL, size and
+SHA-256, and optionally:
+
+- `convert`: files fetched to a staging folder and packed into one GGUF. `types` lists the
+  output types in order of preference with an optional `min_ram_gb`; the first type the
+  machine has enough RAM for is used. `{type}` in `output` is replaced by that type.
+- `recipes`: user recipes written to `<model-dir>/recipes/` after install (existing files
+  are kept). A `models` value of `{<convert id>}` becomes that step's output file.
+
+Downloads run one at a time with `curl` (built into Windows 10 and later; install it on
+Linux), resume after a stop or failure, and are checked against their SHA-256 before they
+are moved into place.

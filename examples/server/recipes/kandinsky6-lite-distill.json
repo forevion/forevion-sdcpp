@@ -1,0 +1,60 @@
+{
+  "schema_version": 1,
+  "id": "kandinsky6-lite-distill",
+  "name": "Kandinsky 6.0 Lite Distill",
+  "size_multiple": 16,
+  "description": "Text-to-video with the distilled Kandinsky 6.0 Lite checkpoint: 10 PiFlow steps without CFG. The jointly generated audio latent is not decoded yet. Use the Qwen2.5-VL 7B and CLIP-L text encoders from the same release.",
+  "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers",
+  "slots": [
+    {
+      "id": "diffusion_model",
+      "required": true
+    },
+    {
+      "id": "llm",
+      "required": true,
+      "label": "Qwen 2.5 VL 7B Text Encoder"
+    },
+    {
+      "id": "clip_l",
+      "required": true,
+      "label": "CLIP-L"
+    },
+    {
+      "id": "vae",
+      "required": false,
+      "label": "HunyuanVideo VAE"
+    },
+    {
+      "id": "tae",
+      "required": false,
+      "label": "TAEHV"
+    }
+  ],
+  "required_any": [
+    [
+      "vae",
+      "tae"
+    ]
+  ],
+  "video_constraints": {
+    "frame_step": 4,
+    "frame_offset": 1,
+    "frame_rounding": "ceil",
+    "min_frames": 1
+  },
+  "defaults": {
+    "sampling_method": "euler",
+    "scheduler": "piflow",
+    "video_frames": 49,
+    "fps": 24,
+    "cfg_scale": 1,
+    "steps": 10,
+    "width": 864,
+    "height": 480
+  },
+  "disabled_features": [
+    "img2img",
+    "mask_image"
+  ]
+}

@@ -95,6 +95,13 @@ model and its defaults when the job starts.
 | GET | `/sdcpp/v1/model-files` | `{files: [{id, name, category, root, relative_path}], errors: [...]}` |
 | POST | `/sdcpp/v1/models/refresh` | Rescan recipes and files; return `{errors: [...]}` |
 | GET | `/sdcpp/v1/models/status` | Current model configuration (`configured` or `empty`), recipe, components and revision |
+| GET | `/sdcpp/v1/jobs` | `{jobs: [...]}`: image and video jobs still held by the server, oldest first, without results or previews, each with a `summary` (prompt, size, frames, steps, recipe) |
+| GET | `/sdcpp/v1/outputs` | `{outputs: [...], total, enabled}`: saved results from `--output-dir`, newest first; `offset` and `limit` query parameters page the list |
+| GET | `/sdcpp/v1/outputs/files/{file}` | A saved image or video |
+| DELETE | `/sdcpp/v1/outputs/{file}` | Delete a saved result and its sidecar |
+| GET | `/sdcpp/v1/downloads` | `{packages: [...], errors, ram_gb, model_root}`: download packages with `installed`, `size`, `missing_bytes`, `components` and `status` (`state`, `detail`, `error`, `done_bytes`, `total_bytes`, `speed_bps`, `queue_position`) |
+| POST | `/sdcpp/v1/downloads/{id}` | Queue a package download (202) |
+| POST | `/sdcpp/v1/downloads/{id}/cancel` | Stop or unqueue a package download; partial files are kept for resuming |
 
 Example `POST /sdcpp/v1/img_gen` request with a model selection.
 
@@ -1433,6 +1440,7 @@ Compared with `img_gen`, the `vid_gen` request body:
 - `mask_image`, `control_image`, `control_strength`, `ip_adapter_image`, `ip_adapter_strength`, and `embed_image_metadata` are not part of the request schema
 - `ref_images` is accepted for MiniMax-H3 Ref2VA conditioning; other video model families currently ignore it
 - `vid_gen` adds `end_image`, `control_frames`, `high_noise_sample_params`, `video_frames`, `fps`, `moe_boundary`, and `vace_strength`
+- `vid_gen` accepts `still_frame` (integer, default `-1`): when zero or more, the job returns only that frame of the generated clip (clamped to the last frame) as a PNG with `mime_type` `image/png` and `frame_count` 1
 
 Example:
 

@@ -1,0 +1,7 @@
+#ifndef __SD_EXAMPLES_SERVER_DOWNLOADS_BUILTIN_H__
+#define __SD_EXAMPLES_SERVER_DOWNLOADS_BUILTIN_H__
+
+static const char* const k_builtin_downloads[] = {
+@SD_BUILTIN_DOWNLOADS@};
+
+#endif

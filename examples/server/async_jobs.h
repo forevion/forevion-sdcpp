@@ -5,6 +5,7 @@
 #include <condition_variable>
 #include <cstdint>
 #include <deque>
+#include <map>
 #include <memory>
 #include <mutex>
 #include <string>
@@ -40,6 +41,8 @@ struct AsyncJobProgress {
     int64_t total                                       = 0;
     std::chrono::steady_clock::time_point stage_started = std::chrono::steady_clock::now();
     std::chrono::steady_clock::time_point finished{};
+    // Wall time per stage name, accumulated across passes (used for time estimates).
+    std::map<std::string, int64_t> stage_ms;
 };
 
 struct AsyncGenerationJob {
@@ -52,6 +55,7 @@ struct AsyncGenerationJob {
     int64_t completed_at = 0;
     std::unique_ptr<ServerModelSelection> model;
     json request_body;
+    json summary;
     uint64_t model_revision = 0;
     ImgGenJobRequest img_gen;
     VidGenJobRequest vid_gen;
