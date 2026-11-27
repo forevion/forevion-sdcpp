@@ -1,0 +1,351 @@
+:root {
+    --bg: #0d0d12;
+    --bg-raised: #15151c;
+    --bg-sunken: #0a0a0e;
+    --bg-hover: #1d1d26;
+    --line: #26262f;
+    --line-strong: #34343f;
+    --text: #ececf1;
+    --text-2: #a3a3b2;
+    --text-3: #6e6e7e;
+    --accent: #9d8cff;
+    --accent-strong: #b3a6ff;
+    --accent-soft: rgba(157, 140, 255, 0.14);
+    --accent-text: #0d0d12;
+    --ok: #5fd39a;
+    --warn: #f0b85c;
+    --danger: #ff7a85;
+    --danger-soft: rgba(255, 122, 133, 0.12);
+    --radius: 12px;
+    --radius-sm: 8px;
+    --font: "Inter", "Segoe UI Variable", "Segoe UI", system-ui, -apple-system, "Cantarell", "Ubuntu", sans-serif;
+    --mono: "JetBrains Mono", "Cascadia Code", "Consolas", "DejaVu Sans Mono", monospace;
+    color-scheme: dark;
+}
+
+* {
+    box-sizing: border-box;
+}
+
+html,
+body,
+#app {
+    height: 100%;
+    margin: 0;
+}
+
+body {
+    background: var(--bg);
+    color: var(--text);
+    font: 14px/1.5 var(--font);
+    -webkit-font-smoothing: antialiased;
+}
+
+button,
+input,
+select,
+textarea {
+    font: inherit;
+    color: inherit;
+}
+
+a {
+    color: var(--accent-strong);
+}
+
+::selection {
+    background: var(--accent-soft);
+}
+
+:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+}
+
+::-webkit-scrollbar {
+    width: 10px;
+    height: 10px;
+}
+
+::-webkit-scrollbar-thumb {
+    background: var(--line-strong);
+    border-radius: 10px;
+    border: 2px solid var(--bg);
+}
+
+/* ---------- controls ---------- */
+
+.btn,
+.btn-secondary,
+.btn-ghost {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    min-height: 36px;
+    padding: 0 14px;
+    border-radius: var(--radius-sm);
+    border: 1px solid transparent;
+    cursor: pointer;
+    font-weight: 550;
+    white-space: nowrap;
+    transition: background 0.12s, border-color 0.12s, color 0.12s;
+}
+
+.btn {
+    background: var(--accent);
+    color: var(--accent-text);
+}
+
+.btn:hover:not(:disabled) {
+    background: var(--accent-strong);
+}
+
+.btn-secondary {
+    background: var(--bg-hover);
+    border-color: var(--line);
+}
+
+.btn-secondary:hover:not(:disabled) {
+    border-color: var(--line-strong);
+    background: #23232d;
+}
+
+.btn-ghost {
+    background: transparent;
+    color: var(--text-2);
+}
+
+.btn-ghost:hover:not(:disabled) {
+    color: var(--text);
+    background: var(--bg-hover);
+}
+
+.btn-danger {
+    color: var(--danger);
+}
+
+.btn-danger:hover:not(:disabled) {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.btn-lg {
+    min-height: 46px;
+    font-size: 15px;
+    border-radius: 10px;
+}
+
+button:disabled {
+    opacity: 0.45;
+    cursor: not-allowed;
+}
+
+.icon-btn {
+    width: 34px;
+    min-height: 34px;
+    padding: 0;
+}
+
+.field {
+    display: grid;
+    gap: 6px;
+}
+
+.field > span,
+.label {
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+}
+
+.input,
+textarea.input,
+select.input {
+    width: 100%;
+    background: var(--bg-sunken);
+    border: 1px solid var(--line);
+    border-radius: var(--radius-sm);
+    padding: 9px 11px;
+    outline: none;
+    transition: border-color 0.12s;
+}
+
+.input:hover {
+    border-color: var(--line-strong);
+}
+
+.input:focus {
+    border-color: var(--accent);
+}
+
+textarea.input {
+    resize: vertical;
+    min-height: 110px;
+    line-height: 1.55;
+}
+
+.segmented {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 2px;
+    padding: 3px;
+    background: var(--bg-sunken);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+}
+
+.segmented button {
+    min-height: 32px;
+    border: 0;
+    border-radius: 7px;
+    background: transparent;
+    color: var(--text-2);
+    cursor: pointer;
+    font-weight: 550;
+    padding: 0 8px;
+}
+
+.segmented button[aria-pressed="true"] {
+    background: var(--bg-hover);
+    color: var(--text);
+    box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+
+.range {
+    width: 100%;
+    accent-color: var(--accent);
+}
+
+.panel {
+    background: var(--bg-raised);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+}
+
+.muted {
+    color: var(--text-2);
+}
+
+.faint {
+    color: var(--text-3);
+}
+
+.mono {
+    font-family: var(--mono);
+    font-size: 12px;
+}
+
+.chip {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    height: 22px;
+    padding: 0 8px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+    color: var(--text-2);
+    font-size: 12px;
+    font-weight: 550;
+}
+
+.chip--ok {
+    color: var(--ok);
+    background: rgba(95, 211, 154, 0.1);
+}
+
+.chip--accent {
+    color: var(--accent-strong);
+    background: var(--accent-soft);
+}
+
+.chip--danger {
+    color: var(--danger);
+    background: var(--danger-soft);
+}
+
+.progress {
+    height: 6px;
+    border-radius: 6px;
+    background: var(--bg-hover);
+    overflow: hidden;
+}
+
+.progress > div {
+    height: 100%;
+    background: linear-gradient(90deg, var(--accent), var(--accent-strong));
+    border-radius: 6px;
+    transition: width 0.4s ease;
+}
+
+.progress--indeterminate > div {
+    width: 35% !important;
+    animation: indeterminate 1.4s ease-in-out infinite;
+}
+
+@keyframes indeterminate {
+    from {
+        transform: translateX(-100%);
+    }
+    to {
+        transform: translateX(300%);
+    }
+}
+
+.status-message {
+    margin: 0;
+    padding: 9px 12px;
+    border-radius: var(--radius-sm);
+    background: var(--bg-hover);
+    color: var(--text-2);
+}
+
+.status-message--error {
+    background: var(--danger-soft);
+    color: var(--danger);
+}
+
+.empty {
+    display: grid;
+    place-items: center;
+    gap: 10px;
+    text-align: center;
+    color: var(--text-3);
+    padding: 48px 16px;
+}
+
+h1,
+h2,
+h3 {
+    margin: 0;
+    font-weight: 650;
+    letter-spacing: -0.01em;
+}
+
+h1 {
+    font-size: 20px;
+}
+
+h2 {
+    font-size: 15px;
+}
+
+h3 {
+    font-size: 14px;
+}
+
+.sr-only {
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    overflow: hidden;
+    clip: rect(0 0 0 0);
+}
+
+/* DGL workspace (Scripts page) code colors */
+.dgl-workspace .keyword { color: #c4a7ff; }
+.dgl-workspace .string { color: #9fdfb0; }
+.dgl-workspace .number { color: #f0b85c; }
+.dgl-workspace .comment { color: var(--text-3); }

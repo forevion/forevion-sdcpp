@@ -10,6 +10,8 @@
 #include "async_jobs.h"
 #include "common/common.h"
 #include "common/resource_owners.hpp"
+#include "downloads.h"
+#include "library.h"
 #include "model_catalog.h"
 #include "routes.h"
 #include "runtime.h"
@@ -171,9 +173,12 @@ int main(int argc, const char** argv) {
     register_sdcpp_api_endpoints(svr, runtime);
     register_dgl_endpoints(svr, runtime);
     register_model_endpoints(svr, runtime);
+    register_library_endpoints(svr, runtime);
+    register_download_endpoints(svr, runtime);
 
     LOG_INFO("listening on: http://%s:%d\n", svr_params.listen_ip.c_str(), svr_params.listen_port);
     svr.listen(svr_params.listen_ip, svr_params.listen_port);
+    stop_downloads();
 
     {
         std::lock_guard<std::mutex> lock(async_job_manager.mutex);

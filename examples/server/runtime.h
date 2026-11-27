@@ -28,6 +28,7 @@ struct SDSvrParams {
     int weight_residency_ttl  = -1;
     std::string serve_html_path;
     std::string dgl_dir = "dgl";
+    std::string output_dir = "outputs";
     std::vector<std::string> model_dirs;
     bool normal_exit         = false;
     sd_log_level_t log_level = SD_LOG_INFO;
@@ -121,6 +122,8 @@ struct VidGenJobRequest {
     int output_compression    = 100;
     std::string preview_mode  = "none";
     int preview_interval      = 1;
+    // >= 0: return only this frame of the clip as a PNG still (clamped to the last frame).
+    int still_frame = -1;
 
     SDOptPtr to_video_opt() { return gen_params.to_video_opt(); }
 };

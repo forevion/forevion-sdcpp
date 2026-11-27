@@ -77,6 +77,8 @@ add_executable(${TARGET}
     routes_sdapi.cpp
     routes_sdcpp.cpp
     routes_dgl.cpp
+    library.cpp
+    downloads.cpp
 )
 if(APPLE)
     sd_set_macos_rpaths(${TARGET})
@@ -101,6 +103,12 @@ foreach(RECIPE_FILE IN LISTS BUILTIN_RECIPE_FILES)
     string(APPEND SD_BUILTIN_RECIPES "R\"recipes(${RECIPE_JSON})recipes\",\n")
 endforeach()
 configure_file(recipes_builtin.h.in "${CMAKE_CURRENT_BINARY_DIR}/recipes_builtin.h" @ONLY)
+
+set(BUILTIN_DOWNLOADS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/downloads.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${BUILTIN_DOWNLOADS_FILE}")
+file(READ "${BUILTIN_DOWNLOADS_FILE}" DOWNLOADS_JSON)
+set(SD_BUILTIN_DOWNLOADS "R\"downloads(${DOWNLOADS_JSON})downloads\",\n")
+configure_file(downloads_builtin.h.in "${CMAKE_CURRENT_BINARY_DIR}/downloads_builtin.h" @ONLY)
 target_include_directories(${TARGET} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 install(TARGETS ${TARGET} RUNTIME)

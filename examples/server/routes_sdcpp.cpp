@@ -6,6 +6,7 @@
 
 #include "async_jobs.h"
 #include "common/common.h"
+#include "library.h"
 #include "common/resource_owners.hpp"
 #include "model_catalog.h"
 
@@ -430,6 +431,7 @@ static bool parse_vid_gen_request(const json& body,
         return false;
     }
     request.preview_mode     = body.value("preview", std::string("none"));
+    request.still_frame      = body.value("still_frame", -1);
     request.preview_interval = body.value("preview_interval", 1);
     // Intentionally disable prompt-embedded LoRA tag parsing for server APIs.
     if (!request.gen_params.resolve_and_validate(VID_GEN, "", runtime.ctx_params->hires_upscalers_dir, true)) {
@@ -462,6 +464,7 @@ static void submit_generation_job(ServerRuntime& runtime, const httplib::Request
         job->kind                     = mode == VID_GEN ? AsyncJobKind::VidGen : AsyncJobKind::ImgGen;
         ServerRuntime request_runtime = runtime;
         std::shared_lock<std::shared_mutex> model_lock(runtime.models->model_mutex, std::defer_lock);
+        const json requested_model = body.value("model", json());
         if (auto model = body.find("model"); model != body.end()) {
             try {
                 job->model = std::make_unique<ServerModelSelection>(resolve_model_selection(runtime, *model, mode));
@@ -493,6 +496,7 @@ static void submit_generation_job(ServerRuntime& runtime, const httplib::Request
             res.set_content(json({{"error", error_message}}).dump(), "application/json");
             return;
         }
+        job->summary = make_job_summary(*job, requested_model.is_null() ? json::object() : json({{"model", requested_model}}));
         if (model_lock.owns_lock()) {
             job->model_revision = runtime.models->revision;
             job->request_body   = std::move(body);
