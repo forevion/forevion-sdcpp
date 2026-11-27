@@ -163,6 +163,9 @@ component selection. Use the native API or DGL scripts for those.
 ### DGL editor
 
 Open the Web UI using the local server address and select **Scripts** in the sidebar.
+The workspace follows the server's `--listen-ip` setting. The default `127.0.0.1`
+limits access to the server machine. When the server listens on a LAN interface, open
+the Web UI using the server's LAN IP and port to use it from another device.
 Select a saved script or choose **New**. **Duplicate** saves a copy of the
 current editor text under a new name. Edit **File name** before saving to save
 under a different name. **Run** submits the editor text to the generation queue,
@@ -177,23 +180,9 @@ encoded output, call `media::save("output/cover.png", cover)` before returning
 it. Saving is optional. The job result contains the same encoded bytes, and
 polling returns them without re-encoding.
 
-The editor underlines supported media paths and shows compact previews below
-their lines. Previews align with the code indentation, and files on the same
-line appear side by side when space permits. Media loads near the visible area
-of the editor. An output path without a file stays collapsed, and a completed
-run refreshes its preview when the file becomes available. Drag the handle in
-a preview's lower-right corner to resize it, or double-click the handle to reset it.
-Click an image or video preview to open it at a larger size. Expanded videos
-open at the current playback position. Click the picture to play or pause, or
-drag the timeline below it to seek. AVI path previews support MJPEG and
-uncompressed 24-bit RGB video with up to 64 MiB of PCM or 32-bit float audio.
-The speaker button mutes the preview. To adjust volume in an inline preview,
-hover or focus the speaker button to open the volume slider.
-Use a relative path under the server's working directory, such as
-`assets/reference.png` or `output/clip.webm`. Turn off **Media view** in the
-editor toolbar to hide the preview. The server previews files under `input/`,
-`output/`, and `assets/`. Start the server
-with `--no-media-view` to disable file previews at the server.
+The server can serve files under `input/`, `output/` and `assets/` for upstream
+editors' inline media previews; the Scripts page does not show them yet. Start the
+server with `--no-media-view` to turn that file access off.
 
 DGL jobs share an execution context for the lifetime of the server. Compatible
 scripts can reuse loaded model components across runs. The context can release
