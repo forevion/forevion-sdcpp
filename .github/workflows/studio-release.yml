@@ -1,0 +1,163 @@
+name: Studio release
+
+# Portable CPU packages of sd-server + sd-cli with the Studio Web UI built in.
+# Pull requests only build them (downloadable as workflow artifacts); a push to master
+# or a manual run also publishes them as a GitHub Release tagged studio-<date>-<commit>.
+on:
+  push:
+    branches:
+      - master
+  pull_request:
+    branches:
+      - develop
+      - master
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: studio-release-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  # One ggml CPU backend per instruction set (SSE4 ... AVX-512) is chosen at runtime.
+  CPU_PORTABLE: -DGGML_NATIVE=OFF -DGGML_BACKEND_DL=ON -DGGML_CPU_ALL_VARIANTS=ON -DSD_BUILD_SHARED_LIBS=ON -DSD_BUILD_SHARED_GGML_LIB=ON -DSD_SERVER_BUILD_FRONTEND=ON
+
+jobs:
+  linux:
+    # Built on 22.04 so the binaries run on glibc 2.35 and newer (Ubuntu 22.04+, Zorin OS 17+, Debian 12+).
+    runs-on: ubuntu-22.04
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Submodules
+        run: git submodule update --init --depth 1 ggml thirdparty/libwebp thirdparty/libwebm
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.15.1
+
+      - name: Dependencies
+        run: sudo apt-get update && sudo apt-get install -y ninja-build
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release $CPU_PORTABLE \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH='$ORIGIN'
+          cmake --build build --target sd-server sd-cli
+
+      - name: Package
+        run: |
+          pkg=sdcpp-studio-linux-x64
+          mkdir -p "$pkg"
+          cp -a build/bin/. "$pkg/"
+          cp scripts/setup-sdcpp.sh "$pkg/"
+          cp LICENSE "$pkg/stable-diffusion.cpp.txt"
+          cp ggml/LICENSE "$pkg/ggml.txt"
+          cp thirdparty/libwebm/LICENSE.TXT "$pkg/libwebm.txt"
+          cp thirdparty/libwebp/COPYING "$pkg/libwebp.txt"
+          git rev-parse --short HEAD > "$pkg/VERSION"
+          "$pkg/sd-server" --version
+          tar -czf "$pkg.tar.gz" "$pkg"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sdcpp-studio-linux-x64
+          path: sdcpp-studio-linux-x64.tar.gz
+
+  windows:
+    runs-on: windows-2022
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Submodules
+        run: git submodule update --init --depth 1 ggml thirdparty/libwebp thirdparty/libwebm
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.15.1
+
+      - name: Build
+        shell: pwsh
+        run: |
+          $vswhere = "${env:ProgramFiles(x86)}\Microsoft Visual Studio\Installer\vswhere.exe"
+          $vsPath = & $vswhere -latest -products * -requires Microsoft.VisualStudio.Component.VC.Tools.x86.x64 -property installationPath
+          & "$vsPath\Common7\Tools\Launch-VsDevShell.ps1" -Arch amd64 -HostArch amd64 -SkipAutomaticLocation
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DCMAKE_C_COMPILER=cl.exe -DCMAKE_CXX_COMPILER=cl.exe -DCMAKE_CXX_FLAGS=/bigobj $env:CPU_PORTABLE.Split(' ')
+          cmake --build build --target sd-server sd-cli
+
+      - name: Package
+        shell: pwsh
+        run: |
+          $pkg = "sdcpp-studio-windows-x64"
+          New-Item -ItemType Directory $pkg | Out-Null
+          Copy-Item build\bin\* $pkg -Recurse
+          Copy-Item LICENSE "$pkg\stable-diffusion.cpp.txt"
+          Copy-Item ggml\LICENSE "$pkg\ggml.txt"
+          Copy-Item thirdparty\libwebm\LICENSE.TXT "$pkg\libwebm.txt"
+          Copy-Item thirdparty\libwebp\COPYING "$pkg\libwebp.txt"
+          git rev-parse --short HEAD | Set-Content "$pkg\VERSION"
+          $launcher = @(
+            '@echo off'
+            'rem Starts sd.cpp Studio at http://127.0.0.1:1234. Close this window to stop it.'
+            'cd /d "%~dp0"'
+            'set /a THREADS=%NUMBER_OF_PROCESSORS% / 2'
+            'start "" /min cmd /c "timeout /t 4 /nobreak >nul & start "" http://127.0.0.1:1234"'
+            'sd-server.exe --listen-ip 127.0.0.1 --listen-port 1234 --model-dir models --output-dir outputs --mmap --auto-fit off --vae-tiling -t %THREADS%'
+            'pause'
+          )
+          Set-Content "$pkg\start-studio.bat" $launcher -Encoding ascii
+          & "$pkg\sd-server.exe" --version
+          Compress-Archive -Path $pkg -DestinationPath "$pkg.zip"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sdcpp-studio-windows-x64
+          path: sdcpp-studio-windows-x64.zip
+
+  release:
+    if: ${{ github.event_name != 'pull_request' }}
+    needs: [linux, windows]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Checksums and tag
+        id: meta
+        run: |
+          cd dist
+          sha256sum sdcpp-studio-* > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          echo "tag=studio-$(date -u +%Y%m%d)-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
+
+      - uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ steps.meta.outputs.tag }}
+          target_commitish: ${{ github.sha }}
+          name: sd.cpp Studio ${{ steps.meta.outputs.tag }}
+          make_latest: true
+          body: |
+            CPU builds of sd-server and sd-cli with the Studio Web UI, from ${{ github.sha }}.
+
+            - **Linux x64** (`sdcpp-studio-linux-x64.tar.gz`): glibc 2.35+ (Ubuntu 22.04+, Zorin OS 17+). Easiest: run `setup-sdcpp.sh` (also inside the archive), which downloads and starts this release.
+            - **Windows x64** (`sdcpp-studio-windows-x64.zip`): unzip and double-click `start-studio.bat`.
+
+            Models are downloaded from the Models page. Check files against `SHA256SUMS.txt`.
+          files: |
+            dist/sdcpp-studio-linux-x64.tar.gz
+            dist/sdcpp-studio-windows-x64.zip
+            dist/SHA256SUMS.txt

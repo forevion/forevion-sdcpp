@@ -83,8 +83,8 @@ respectively.
 
 Use `sd_dgl_ctx_release_staging()` to release idle GPU staging copies backed by
 RAM weights. Use `sd_dgl_ctx_unload_models()` to release cached model components
-and reload them on demand. Both return `SD_STATUS_BUSY` while the context is
-running a script or generation.
+and reload them on demand. Both clear idle buffer caches on supported backends
+and return `SD_STATUS_BUSY` while the context is running a script or generation.
 
 Use `sd_generate_video()` with options from `sd_vid_gen_opt_create()` to generate video. Its result
 exposes frames through the same image accessors, optional audio through
@@ -320,9 +320,11 @@ Image and LTX/MiniMax-H3 video hires passes use the same DGL execution path.
 Set `hires.enabled=true`. The default is latent bilinear upscaling by 2,
 followed by refinement with the original model and prompt conditions.
 `hires.steps=0` inherits the base step count; denoising strength defaults to
-0.7. Without custom sigmas, a schedule with `floor(steps / strength)` intervals
-is generated and its last `steps + 1` entries are used. `hires.sigmas` instead
-supplies the complete refinement schedule and is not sliced by strength.
+0.7. The automatic schedule uses `floor(steps / strength)` intervals and keeps
+the last `steps + 1` entries. If strength is below 1 and rounding would leave
+the full schedule in place, one extra interval is generated so the first sigma
+is trimmed. Refinement still runs for the requested step count. `hires.sigmas`
+supplies the complete refinement schedule and is used directly.
 
 `hires.target_width` and `hires.target_height` override the scale. Supplying
 only one makes a square target. Output dimensions follow model alignment.
