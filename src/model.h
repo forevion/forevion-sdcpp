@@ -74,6 +74,7 @@ enum SDVersion {
     VERSION_MINIMAX_H3_IMAGE,
     VERSION_RELAY_VSR,
     VERSION_SEEDVR2,
+    VERSION_KANDINSKY6,
     VERSION_COUNT,
 };
 
@@ -203,6 +204,10 @@ static inline bool sd_version_is_hunyuan_video(SDVersion version) {
         return true;
     }
     return false;
+}
+
+static inline bool sd_version_is_kandinsky6(SDVersion version) {
+    return version == VERSION_KANDINSKY6;
 }
 
 static inline bool sd_version_is_anima(SDVersion version) {

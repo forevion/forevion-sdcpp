@@ -35,6 +35,7 @@ const std::vector<ModelDefinition>& iris_definitions();
 const std::vector<ModelDefinition>& sd_definitions();
 const std::vector<ModelDefinition>& moss_image_definitions();
 const std::vector<ModelDefinition>& seedvr2_definitions();
+const std::vector<ModelDefinition>& kandinsky6_definitions();
 
 static bool valid_model_id(std::string_view id) {
     if (id.empty() || id == "auto" || id.front() < 'a' || id.front() > 'z')
@@ -99,6 +100,7 @@ static const std::array<const ModelDefinition*, VERSION_COUNT>& model_definition
         append(sd_definitions());
         append(moss_image_definitions());
         append(seedvr2_definitions());
+        append(kandinsky6_definitions());
         for (const auto* definition : result) {
             if (!definition)
                 throw std::logic_error("missing model registration");
