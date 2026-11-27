@@ -3,10 +3,10 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import Icon from "../components/Icon.vue";
 import MediaView from "../components/MediaView.vue";
-import { api } from "../lib/api";
 import {
     activeJobs,
     currentRecipe,
+    deleteOutput,
     formatBytes,
     eta,
     formatDuration,
@@ -65,10 +65,9 @@ function reuseAndEdit(output: OutputEntry) {
 }
 
 async function remove(output: OutputEntry) {
-    await api.deleteOutput(output.file);
+    await deleteOutput(output);
     open.value = null;
     confirmDelete.value = false;
-    await loadOutputs();
 }
 
 function step(delta: number) {
