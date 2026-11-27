@@ -31,6 +31,8 @@ const std::vector<ModelDefinition>& kandinsky6_definitions() {
         definition.traits.supports_video_generation = true;
         definition.traits.video_tae                 = true;
         definition.sampling                         = {FLOW_PRED, 5.f};
+        definition.sampling.default_sample_method   = EULER_SAMPLE_METHOD;
+        definition.sampling.default_scheduler       = PIFLOW_SCHEDULER;
         definition.build                            = build_kandinsky6;
         return std::vector<ModelDefinition>{std::move(definition)};
     }();

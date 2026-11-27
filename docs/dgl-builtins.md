@@ -213,3 +213,4 @@ Pass the ID as the component loader's `family` argument. The default is `"auto"`
 | `minimax_h3_image` | MiniMax-H3-Image |
 | `relayvsr` | RelayVSR |
 | `seedvr2` | SeedVR2 |
+| `kandinsky6` | Kandinsky 6 |

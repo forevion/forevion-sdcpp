@@ -91,6 +91,7 @@ API and command-line option may change frequently.***
     - [MiniMax-H3](./docs/models/minimax_h3.md)
     - [LTX-2.3/LTX-2.5](./docs/models/ltx2.md)
     - [HunyuanVideo 1.5](./docs/models/hunyuan_video.md)
+    - [Kandinsky 6](./docs/models/kandinsky6.md)
     - [LingBot-Video](./docs/models/lingbot_video.md)
   - Video Upscale Models
     - [RelayVSR](./docs/models/relay_vsr.md)

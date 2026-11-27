@@ -107,6 +107,7 @@ sampler or guidance configuration.
 | FLUX | `flux` |
 | Beta | `beta` |
 | LLaDA-Image | `llada_image` |
+| PiFlow | `piflow` |
 
 `normal` is accepted as an alias for `discrete`.
 

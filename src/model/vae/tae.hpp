@@ -563,7 +563,8 @@ public:
 
     ggml_tensor* decode(GGMLRunnerContext* ctx, ggml_tensor* z) {
         auto decoder = std::dynamic_pointer_cast<TinyVideoDecoder>(blocks["decoder"]);
-        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || sd_version_is_minimax_h3(version)) {
+        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || sd_version_is_minimax_h3(version) ||
+            sd_version_is_kandinsky6(version)) {
             // (W, H, C, T) -> (W, H, T, C)
             z = ggml_cont(ctx->ggml_ctx, ggml_permute(ctx->ggml_ctx, z, 0, 1, 3, 2));
         }
@@ -593,7 +594,8 @@ public:
                                   result->nb[1], result->nb[2], result->nb[3], 0);
         }
 
-        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || sd_version_is_minimax_h3(version)) {
+        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || sd_version_is_minimax_h3(version) ||
+            sd_version_is_kandinsky6(version)) {
             // (W, H, T, C) -> (W, H, C, T)
             result = ggml_cont(ctx->ggml_ctx, ggml_permute(ctx->ggml_ctx, result, 0, 1, 3, 2));
         }
@@ -670,7 +672,8 @@ public:
     }
 
     ggml_tensor* encode(GGMLRunnerContext* ctx, ggml_tensor* x) {
-        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || (sd_version_is_minimax_h3(version) && x->ne[3] > 1)) {
+        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || (sd_version_is_minimax_h3(version) && x->ne[3] > 1) ||
+            sd_version_is_kandinsky6(version)) {
             // (W, H, T, C) -> (W, H, C, T)
             x = ggml_cont(ctx->ggml_ctx, ggml_permute(ctx->ggml_ctx, x, 0, 1, 3, 2));
         }
@@ -689,7 +692,7 @@ public:
             }
         }
         x = encoder->forward(ctx, x);
-        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version)) {
+        if (sd_version_is_wan(version) || sd_version_is_hunyuan_video(version) || sd_version_is_ltxav(version) || sd_version_is_kandinsky6(version)) {
             // (W, H, C, T) -> (W, H, T, C)
             x = ggml_cont(ctx->ggml_ctx, ggml_permute(ctx->ggml_ctx, x, 0, 1, 3, 2));
         }

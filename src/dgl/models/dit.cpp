@@ -302,7 +302,7 @@ namespace sd::dgl::models {
         const auto& shape       = x.shape();
         const auto channel_axis = shape.size() == 5 ? 3 : 2;
         const auto down_factor  = get_diffusion_model_down_factor();
-        const bool packed       = sd_version_is_ltxav(version()) || sd_version_is_minimax_h3(version());
+        const bool packed       = sd_version_is_ltxav(version()) || sd_version_is_minimax_h3(version()) || sd_version_is_kandinsky6(version());
         const bool unet_batch   = shape.size() == 4 && sd_version_is_unet(version());
         if ((shape.size() != 4 && shape.size() != 5) ||
             (packed ? shape[channel_axis] < get_latent_channel() : shape[channel_axis] != get_latent_channel()) ||
@@ -396,6 +396,8 @@ namespace sd::dgl::models {
                                                    options.audio_length, options.video_sigma_shift, options.audio_sigma_shift, step.target_sigma};
         } else if (sd_version_is_ltxav(version())) {
             params.extra = LTXAVDiffusionExtra{nullptr, present(audio_time), options.audio_length, options.fps, present(options.video_positions), first(condition.extra_c_crossattns)};
+        } else if (sd_version_is_kandinsky6(version())) {
+            params.extra = Kandinsky6DiffusionExtra{options.audio_length, step.target_sigma};
         } else if (sd_version_is_minit2i(version())) {
             params.extra = MiniT2IDiffusionExtra{params.y};
         } else if (sd_version_is_sensenova_u1(version())) {
