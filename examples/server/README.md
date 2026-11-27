@@ -127,19 +127,37 @@ while using the browser.
 
 ### Get models
 
-Open **Models** and click **Download** on a package. Progress, speed and time left
-show on the card; **Stop** keeps the downloaded part so the next **Resume** continues
-from there. When a package finishes, its recipes are installed and its models appear
-under **Create**. See [Model downloads](#model-downloads) for adding packages.
+**Models** has three tabs.
 
-Models placed by hand also work: put them in the category folders under `models/`
-(see [Model directories](#model-directories)) and add a user recipe whose `models`
-field names the default files. **Rescan folder** on the Models page picks up changes.
+- **Download** lists the download packages. **Download** saves a package's files into
+  their category folders (`diffusion_models/`, `text_encoders/`, `vae/`, ...) with
+  progress, speed and time left; **Stop** keeps the downloaded part so **Resume**
+  continues from there. The trash button deletes a package's downloaded files after a
+  confirmation that lists them and says which other packages or configs use them.
+  **Add model** adds a single file from a link (Hugging Face links get their size and
+  SHA-256 automatically), **New package** and the pencil button create or edit packages,
+  and **Refresh catalog** re-reads the online catalog.
+- **Installed files** lists every model file with its size, the configs that use it and
+  the free disk space, and deletes files after a confirmation.
+- **Model configs** is where a model becomes usable. **New model config** shows every
+  input type (diffusion model, text encoders, tokenizer, VAE, tiny decoder, and more
+  under **More inputs**); pick a file for each input the model needs, set the defaults
+  and save. A **setup guide** for each downloadable model says which file goes into which
+  input and which settings it needs; **Create config** fills a new config from it for you
+  to check and save. Configs can be edited, copied and deleted, and **Backup** /
+  **Restore** save or load all configs and added packages as one JSON file.
+
+Downloads do not create configs by themselves. Files placed by hand in the category
+folders (see [Model directories](#model-directories)) work the same way; **Rescan
+folder** picks up changes.
 
 ### Create images and videos
 
-1. Open **Create** and pick a model. Only models whose recipe files are all present
-   are listed.
+1. Open **Create** and pick a model config. Only configs whose files are all present
+   are listed as cards. **Model files** shows a picker for every input of the chosen
+   config; changing one affects your next jobs, and **Save as model config** stores the
+   combination. **Other model…** lists built-in model types whose files you pick yourself.
+   **Generate** stays disabled until every required input has a file.
 2. Choose **Video** or **Image**, type a prompt, and pick **Shape** (16:9, 4:3, 1:1,
    9:16), **Size** (Small or Normal, based on the model's default resolution) and, for
    video, **Length** in seconds.
@@ -640,16 +658,31 @@ reads this folder. `--output-dir none` turns saving off.
 
 ### Model downloads
 
-The Models page installs packages from a catalog: the built-in `downloads.json` plus any
-`<model-dir>/downloads/*.json` files in the first model root (same format; a package with
-the same `id` replaces the built-in one). Each package lists files with their URL, size and
-SHA-256, and optionally:
+The Download tab merges three catalog layers; a package with the same `id` in a later
+layer replaces the earlier one:
+
+1. the built-in `downloads.json`;
+2. the online catalog from `--catalog-url` (default: this file on the `master` branch of
+   forevion-sdcpp; `none` turns it off), cached as `<model-dir>/downloads/.online-catalog.json`
+   so it keeps working offline;
+3. `<model-dir>/downloads/*.json` in the first model root: packages added or edited in
+   the UI (`<id>.json`) and any written by hand.
+
+Editing a built-in or online package saves your copy as `<id>.json`; **Reset** deletes it
+and brings the original back. Each package lists files with their category path, URL, size
+and optional SHA-256, and optionally:
 
 - `convert`: files fetched to a staging folder and packed into one GGUF. `types` lists the
   output types in order of preference with an optional `min_ram_gb`; the first type the
   machine has enough RAM for is used. `{type}` in `output` is replaced by that type.
-- `recipes`: user recipes written to `<model-dir>/recipes/` after install (existing files
-  are kept). A `models` value of `{<convert id>}` becomes that step's output file.
+- `guide`: the setup guide shown on the Model configs tab. `inputs` maps input types
+  (`diffusion_model`, `t5xxl`, `llm`, `clip_l`, `vae`, `tae`, ...) to files, `alternatives`
+  lists optional swaps, `settings` holds the config defaults and rules (`defaults`,
+  `video_constraints`, `size_multiple`, `features`, `disabled_features`), and `notes` explain
+  the model. An input value of `{<convert id>}` becomes that step's packed file.
+
+Catalog paths must be `<category>/<file>` with a model file extension, so a package can
+never write outside the model folders.
 
 Downloads run one at a time with `curl` (built into Windows 10 and later; install it on
 Linux), resume after a stop or failure, and are checked against their SHA-256 before they

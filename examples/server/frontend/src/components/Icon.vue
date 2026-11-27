@@ -2,6 +2,7 @@
 defineProps<{ name: string; size?: number }>();
 
 const paths: Record<string, string> = {
+    edit: "M4 20h4L19 9l-4-4L4 16zM13.5 6.5l4 4",
     create: "M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9zM19 15l.9 2.1L22 18l-2.1.9L19 21l-.9-2.1L16 18l2.1-.9z",
     gallery: "M4 5h7v6H4zM13 5h7v9h-7zM4 13h7v6H4zM13 16h7v3h-7z",
     models: "M12 3l8 4.5v9L12 21l-8-4.5v-9zM12 3v18M4 7.5l8 4.5 8-4.5",

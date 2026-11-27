@@ -102,6 +102,19 @@ model and its defaults when the job starts.
 | GET | `/sdcpp/v1/downloads` | `{packages: [...], errors, ram_gb, model_root}`: download packages with `installed`, `size`, `missing_bytes`, `components` and `status` (`state`, `detail`, `error`, `done_bytes`, `total_bytes`, `speed_bps`, `queue_position`) |
 | POST | `/sdcpp/v1/downloads/{id}` | Queue a package download (202) |
 | POST | `/sdcpp/v1/downloads/{id}/cancel` | Stop or unqueue a package download; partial files are kept for resuming |
+| DELETE | `/sdcpp/v1/downloads/{id}/files` | Delete a package's downloaded files (`{deleted: [...]}`); refused with 409 for files the loaded model uses |
+| GET | `/sdcpp/v1/downloads/{id}/definition` | `{package, source, overrides, editable}`: the full package for the editor |
+| PUT | `/sdcpp/v1/downloads/{id}` | Save a package as `<model-dir>/downloads/{id}.json` (an edited copy for built-in and online packages) |
+| DELETE | `/sdcpp/v1/downloads/{id}` | Remove a package saved by the UI, or undo edits to a built-in or online one; downloaded files stay |
+| POST | `/sdcpp/v1/download-catalog/refresh` | Re-read the online catalog; returns its `{state, url, error, checked}` status (also included as `catalog` in `GET /sdcpp/v1/downloads`) |
+| POST | `/sdcpp/v1/download-catalog/custom` | `{url, category, filename?, name?, dry_run?, start?}`: add one model file from a link as a `custom-*` package; Hugging Face links get size and SHA-256 from the Hub. `dry_run` only returns `{url, path, size, sha256, exists}` |
+| GET | `/sdcpp/v1/model-slots` | Input types (`{slots: [{id, label, categories}], categories}`) for config editors |
+| PUT | `/sdcpp/v1/recipes/{id}` | Validate and save a user recipe (model config) as `<model-dir>/recipes/{id}.json` |
+| DELETE | `/sdcpp/v1/recipes/{id}` | Delete a user recipe; built-in recipes cannot be deleted |
+| GET | `/sdcpp/v1/storage` | Model files with `size`, `modified`, `used_by` (recipes) and `loaded`, plus free and total bytes per model root |
+| DELETE | `/sdcpp/v1/model-files/{file id}` | Delete a model file; refused with 409 when the loaded model uses it |
+| GET | `/sdcpp/v1/config/backup` | One JSON file (`kind: sdcpp-studio-config`) with every user recipe and download package file |
+| POST | `/sdcpp/v1/config/restore` | `{backup, mode: merge \| replace}`: validate every entry, then write them (replace first removes current user recipes and packages); nothing changes when any entry is invalid |
 
 Example `POST /sdcpp/v1/img_gen` request with a model selection.
 

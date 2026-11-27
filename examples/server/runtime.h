@@ -29,6 +29,7 @@ struct SDSvrParams {
     std::string serve_html_path;
     std::string dgl_dir = "dgl";
     std::string output_dir = "outputs";
+    std::string catalog_url = "https://raw.githubusercontent.com/forevion/forevion-sdcpp/master/examples/server/downloads.json";
     bool media_view = true;
     std::vector<std::string> model_dirs;
     std::vector<std::string> api_keys;

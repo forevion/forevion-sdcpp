@@ -8,6 +8,8 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <regex>
+#include <sstream>
 #include <thread>
 
 #ifdef _WIN32
@@ -121,11 +123,13 @@ uintmax_t file_size_or_zero(const fs::path& path) {
     return error ? 0 : size;
 }
 
-// Runs curl for one URL, resuming into `target`. Returns an empty string on success.
-std::string run_curl(const std::string& url, const fs::path& target, const std::atomic<bool>& cancel) {
+// Runs curl with `args` (no shell). Callers validate URLs, so no argument contains a quote.
+// Returns an empty string on success, "cancelled" when `cancel` was set, or an error message.
+std::string run_curl(const std::vector<std::string>& args, const std::atomic<bool>* cancel = nullptr) {
 #ifdef _WIN32
-    std::wstring command = L"curl.exe -L --fail --retry 5 --retry-delay 3 -sS -C - -o \"" + target.wstring() + L"\" \"" +
-                           fs::u8path(url).wstring() + L"\"";
+    std::wstring command = L"curl.exe";
+    for (const auto& arg : args)
+        command += L" \"" + fs::u8path(arg).wstring() + L"\"";
     STARTUPINFOW startup{};
     startup.cb = sizeof(startup);
     PROCESS_INFORMATION process{};
@@ -133,7 +137,7 @@ std::string run_curl(const std::string& url, const fs::path& target, const std::
         return "cannot start curl.exe (error " + std::to_string(GetLastError()) + ")";
     CloseHandle(process.hThread);
     while (WaitForSingleObject(process.hProcess, 250) == WAIT_TIMEOUT) {
-        if (cancel.load()) {
+        if (cancel && cancel->load()) {
             TerminateProcess(process.hProcess, 1);
             WaitForSingleObject(process.hProcess, INFINITE);
             CloseHandle(process.hProcess);
@@ -143,15 +147,18 @@ std::string run_curl(const std::string& url, const fs::path& target, const std::
     DWORD code = 1;
     GetExitCodeProcess(process.hProcess, &code);
     CloseHandle(process.hProcess);
-    return code == 0 ? "" : "curl failed with exit code " + std::to_string(code);
+    return code == 0 ? "" : code == 22 ? "the server returned an HTTP error (e.g. 404 Not Found)" : "curl failed with exit code " + std::to_string(code);
 #else
-    const std::string output = target.string();
-    const pid_t pid          = fork();
+    std::vector<char*> argv;
+    argv.push_back(const_cast<char*>("curl"));
+    for (const auto& arg : args)
+        argv.push_back(const_cast<char*>(arg.c_str()));
+    argv.push_back(nullptr);
+    const pid_t pid = fork();
     if (pid < 0)
         return "cannot start curl";
     if (pid == 0) {
-        execlp("curl", "curl", "-L", "--fail", "--retry", "5", "--retry-delay", "3", "-sS", "-C", "-", "-o",
-               output.c_str(), url.c_str(), static_cast<char*>(nullptr));
+        execvp("curl", argv.data());
         _exit(127);
     }
     int status = 0;
@@ -159,7 +166,7 @@ std::string run_curl(const std::string& url, const fs::path& target, const std::
         const pid_t done = waitpid(pid, &status, WNOHANG);
         if (done == pid)
             break;
-        if (cancel.load()) {
+        if (cancel && cancel->load()) {
             kill(pid, SIGTERM);
             waitpid(pid, &status, 0);
             return "cancelled";
@@ -170,8 +177,128 @@ std::string run_curl(const std::string& url, const fs::path& target, const std::
         return "";
     if (WIFEXITED(status) && WEXITSTATUS(status) == 127)
         return "curl is not installed";
+    if (WIFEXITED(status) && WEXITSTATUS(status) == 22)
+        return "the server returned an HTTP error (e.g. 404 Not Found)";
     return "curl failed with exit code " + std::to_string(WIFEXITED(status) ? WEXITSTATUS(status) : -1);
 #endif
+}
+
+bool valid_download_url(const std::string& url) {
+    static const std::regex pattern(R"(^https?://[A-Za-z0-9.\-]+(:[0-9]+)?/[^\s"'<>\\^`{|}]*$)");
+    return url.size() < 4096 && std::regex_match(url, pattern);
+}
+
+bool supported_model_extension(const std::string& name, const std::string& category) {
+    std::string ext = fs::u8path(name).extension().u8string();
+    std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });
+    if (category == "tokenizers")
+        return ext == ".json";
+    return ext == ".gguf" || ext == ".safetensors" || ext == ".sft" || ext == ".ckpt" || ext == ".pt" || ext == ".pth" ||
+           ext == ".bin";
+}
+
+bool valid_file_name(const std::string& name) {
+    static const std::regex pattern(R"(^[A-Za-z0-9][A-Za-z0-9._+\-]{0,200}$)");
+    return std::regex_match(name, pattern) && name.find("..") == std::string::npos;
+}
+
+// Catalog targets must be "<category>/<name>" inside the model directory, with a model extension.
+std::string check_model_path(const std::string& path) {
+    const auto slash = path.find('/');
+    if (slash == std::string::npos)
+        return "path must be <category>/<file>: " + path;
+    const std::string category = path.substr(0, slash);
+    if (!model_categories().count(category))
+        return "unknown model category '" + category + "' in " + path;
+    std::string rest = path.substr(slash + 1);
+    size_t start     = 0;
+    while (true) {
+        const auto next  = rest.find('/', start);
+        const auto piece = rest.substr(start, next == std::string::npos ? std::string::npos : next - start);
+        if (!valid_file_name(piece))
+            return "invalid file name in " + path;
+        if (next == std::string::npos)
+            break;
+        start = next + 1;
+    }
+    if (!supported_model_extension(rest, category))
+        return "unsupported file type: " + path;
+    return "";
+}
+
+std::string check_package(const json& package) {
+    static const std::regex id_pattern(R"(^[A-Za-z0-9_.\-]{1,128}$)");
+    if (!std::regex_match(package.value("id", ""), id_pattern))
+        return "invalid package id";
+    for (const auto& file : package.value("files", json::array())) {
+        if (!valid_download_url(file.value("url", "")))
+            return "invalid URL in package " + package.value("id", "");
+        if (auto error = check_model_path(file.value("path", "")); !error.empty())
+            return error;
+    }
+    for (const auto& convert : package.value("convert", json::array())) {
+        std::string output = convert.value("output", "");
+        if (auto p = output.find("{type}"); p != std::string::npos)
+            output.replace(p, 6, "x");
+        if (auto error = check_model_path(output); !error.empty())
+            return error;
+        if (!std::regex_match(convert.value("id", ""), id_pattern))
+            return "invalid convert step id";
+        for (const auto& input : convert.value("inputs", json::array()))
+            if (!valid_file_name(input.value("name", "")) || !valid_download_url(input.value("url", "")))
+                return "invalid convert input in package " + package.value("id", "");
+    }
+    if (package.contains("guide")) {
+        const json& guide = package["guide"];
+        if (!guide.is_object())
+            return "guide must be an object";
+        for (const char* key : {"inputs", "alternatives"}) {
+            const json files = guide.value(key, json::object());
+            if (!files.is_object())
+                return std::string("guide ") + key + " must map inputs to files";
+            for (auto it = files.begin(); it != files.end(); ++it) {
+                const std::string file = it.value().is_string() ? it.value().get<std::string>() : "";
+                const bool step        = file.size() > 2 && file.front() == '{' && file.back() == '}';
+                if (!step)
+                    if (auto error = check_model_path(file); !error.empty())
+                        return "guide: " + error;
+            }
+        }
+    }
+    return "";
+}
+
+std::string read_text_file(const fs::path& path) {
+    std::ifstream file(path, std::ios::binary);
+    std::ostringstream text;
+    text << file.rdbuf();
+    return text.str();
+}
+
+bool write_text_file(const fs::path& path, const std::string& text) {
+    std::error_code error;
+    fs::create_directories(path.parent_path(), error);
+    const fs::path partial = path.u8string() + ".tmp";
+    {
+        std::ofstream file(partial, std::ios::binary);
+        if (!(file << text))
+            return false;
+    }
+    fs::rename(partial, path, error);
+    return !error;
+}
+
+std::string slugify(std::string text) {
+    std::string out;
+    for (unsigned char c : text) {
+        if (std::isalnum(c))
+            out.push_back(static_cast<char>(std::tolower(c)));
+        else if (!out.empty() && out.back() != '-')
+            out.push_back('-');
+    }
+    while (!out.empty() && out.back() == '-')
+        out.pop_back();
+    return out.empty() ? "model" : out.substr(0, 80);
 }
 
 struct DownloadFile {
@@ -198,6 +325,7 @@ public:
         runtime_ = &runtime;
         load_catalog();
         worker_ = std::thread([this] { run(); });
+        online_ = std::thread([this] { refresh_online_catalog(); });
     }
 
     void stop() {
@@ -210,7 +338,234 @@ public:
         }
         cv_.notify_all();
         worker_.join();
+        if (online_.joinable())
+            online_.join();
     }
+
+    // Fetches the online catalog into <model-dir>/downloads/.online-catalog.json. The cached
+    // copy keeps working offline; the built-in list applies when there is none.
+    json refresh_online_catalog() {
+        const std::string url = runtime_->svr_params->catalog_url;
+        json status           = {{"url", url}};
+        if (url.empty()) {
+            status["state"] = "disabled";
+        } else if (!valid_download_url(url)) {
+            status["state"] = "error";
+            status["error"] = "invalid --catalog-url";
+        } else {
+            const fs::path cache = online_cache_path();
+            const fs::path temp  = cache.u8string() + ".tmp";
+            std::error_code error;
+            fs::create_directories(cache.parent_path(), error);
+            const std::string result = run_curl({"-fsSL", "-m", "30", "-o", temp.u8string(), url});
+            const json catalog       = result.empty() ? json::parse(read_text_file(temp), nullptr, false) : json();
+            if (!result.empty() || !catalog.is_object() || !catalog.contains("packages")) {
+                fs::remove(temp, error);
+                status["state"] = "error";
+                status["error"] = result.empty() ? "the online catalog is not a valid catalog file" : result;
+            } else {
+                fs::rename(temp, cache, error);
+                status["state"] = error ? "error" : "ok";
+                if (error)
+                    status["error"] = error.message();
+            }
+        }
+        status["checked"] = unix_timestamp_now_ms();
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            online_status_ = status;
+        }
+        load_catalog();
+        return status;
+    }
+
+    // Adds a single model file from a link as a user package (<model-dir>/downloads/custom-*.json).
+    // Hugging Face links get their size and SHA-256 from the Hub API. With dry_run only the
+    // details are returned.
+    std::pair<int, json> add_custom(const json& body) {
+        const std::string category = body.value("category", "");
+        std::string url            = body.value("url", "");
+        std::string name           = body.value("filename", "");
+        if (!model_categories().count(category))
+            return {400, {{"error", "choose a model type"}}};
+        if (url.rfind("https://", 0) != 0 || !valid_download_url(url))
+            return {400, {{"error", "enter an https:// link to the model file"}}};
+
+        static const std::regex hf(R"(^https://huggingface\.co/([^/?#]+)/([^/?#]+)/(?:resolve|blob)/([^/?#]+)/([^?#]+)(?:[?#].*)?$)");
+        std::smatch match;
+        std::string sha256, homepage;
+        uintmax_t size  = 0;
+        const fs::path temp = primary_root() / "downloads" / ".inspect.tmp";
+        std::error_code error;
+        fs::create_directories(temp.parent_path(), error);
+        if (std::regex_match(url, match, hf)) {
+            const std::string repo = match[1].str() + "/" + match[2].str(), revision = match[3], file = match[4];
+            url      = "https://huggingface.co/" + repo + "/resolve/" + revision + "/" + file;
+            homepage = "https://huggingface.co/" + repo;
+            if (name.empty())
+                name = fs::u8path(file).filename().u8string();
+            const std::string result = run_curl({"-fsSL", "-m", "30", "-X", "POST", "--data-urlencode", "paths=" + file, "-o",
+                                                 temp.u8string(), "https://huggingface.co/api/models/" + repo + "/paths-info/" + revision});
+            const json info = result.empty() ? json::parse(read_text_file(temp), nullptr, false) : json();
+            fs::remove(temp, error);
+            if (!result.empty())
+                return {502, {{"error", "Hugging Face did not answer for this file (" + result + "). Gated models that need a login are not supported yet."}}};
+            if (!info.is_array() || info.empty() || info[0].value("type", "") != "file")
+                return {400, {{"error", "that link is not a file in this Hugging Face repository"}}};
+            size = info[0].value("size", uintmax_t(0));
+            if (info[0].contains("lfs") && info[0]["lfs"].is_object())
+                sha256 = info[0]["lfs"].value("oid", "");
+        } else {
+            if (name.empty()) {
+                std::string path = url.substr(0, url.find_first_of("?#"));
+                name             = path.substr(path.find_last_of('/') + 1);
+            }
+            if (run_curl({"-fsSIL", "-m", "30", "-o", temp.u8string(), url}).empty()) {
+                static const std::regex length(R"(content-length:\s*([0-9]+))", std::regex::icase);
+                const std::string headers = read_text_file(temp);
+                for (std::sregex_iterator it(headers.begin(), headers.end(), length), end; it != end; ++it)
+                    size = std::stoull((*it)[1].str());
+            }
+            fs::remove(temp, error);
+        }
+        if (!valid_file_name(name) || !supported_model_extension(name, category))
+            return {400, {{"error", "the file name must end in .gguf, .safetensors, .sft, .ckpt, .pt, .pth or .bin (.json for tokenizers)"}}};
+        const std::string path = category + "/" + name;
+        json details           = {{"url", url}, {"path", path}, {"size", size}, {"sha256", sha256}, {"homepage", homepage},
+                                  {"exists", file_size_or_zero(primary_root() / fs::u8path(path)) > 0}};
+        if (body.value("dry_run", false))
+            return {200, details};
+        if (details["exists"].get<bool>())
+            return {409, {{"error", path + " already exists"}}};
+
+        std::string id = "custom-" + slugify(fs::u8path(name).stem().u8string());
+        for (int n = 2; fs::exists(primary_root() / "downloads" / (id + ".json")); ++n)
+            id = "custom-" + slugify(fs::u8path(name).stem().u8string()) + "-" + std::to_string(n);
+        json file = {{"path", path}, {"url", url}, {"size", size}};
+        if (!sha256.empty())
+            file["sha256"] = sha256;
+        json package = {{"id", id},
+                        {"name", body.value("name", "").empty() ? name : body.value("name", "")},
+                        {"group", "Added by you"},
+                        {"description", "Added from " + url},
+                        {"files", json::array({file})}};
+        if (!homepage.empty())
+            package["homepage"] = homepage;
+        if (!write_text_file(primary_root() / "downloads" / (id + ".json"),
+                             json({{"schema_version", 1}, {"packages", json::array({package})}}).dump(2) + "\n"))
+            return {500, {{"error", "cannot write the package file"}}};
+        load_catalog();
+        details["id"] = id;
+        if (body.value("start", true))
+            enqueue(id);
+        return {201, details};
+    }
+
+    // The full package definition for the catalog editor.
+    std::pair<int, json> definition(const std::string& id) {
+        load_catalog();
+        std::lock_guard<std::mutex> lock(mutex_);
+        const json* package = find_package(id);
+        if (!package)
+            return {404, {{"error", "unknown package"}}};
+        json result = *package;
+        result.erase("source");
+        result.erase("overrides");
+        const std::string source = package->value("source", "");
+        const bool user_file      = source != "builtin" && source != "online";
+        return {200,
+                {{"package", result},
+                 {"source", source},
+                 {"overrides", package->value("overrides", json(nullptr))},
+                 {"editable", !user_file || source == id + ".json"}}};
+    }
+
+    // Saves a package as <model-dir>/downloads/<id>.json. For a built-in or online package this
+    // is an edited copy that replaces the original until it is removed again.
+    std::pair<int, json> save_package(const std::string& id, json package) {
+        if (!package.is_object() || package.value("id", "") != id)
+            return {400, {{"error", "the package id must match the URL"}}};
+        if (package.value("name", "").empty())
+            return {400, {{"error", "give the package a name"}}};
+        for (const char* key : {"source", "overrides", "installed", "size", "missing_bytes", "components", "status"})
+            package.erase(key);
+        if (!package.contains("files") && !package.contains("convert"))
+            return {400, {{"error", "add at least one file"}}};
+        if (auto problem = check_package(package); !problem.empty())
+            return {400, {{"error", problem}}};
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            if (const json* existing = find_package(id)) {
+                const std::string source = existing->value("source", "");
+                if (source != "builtin" && source != "online" && source != id + ".json")
+                    return {409, {{"error", "this package comes from " + source + ", which holds several packages; edit that file instead"}}};
+            }
+            if (active_ == id || queue_position(id) > 0)
+                return {409, {{"error", "stop its download first"}}};
+        }
+        if (!write_text_file(primary_root() / "downloads" / (id + ".json"),
+                             json({{"schema_version", 1}, {"packages", json::array({package})}}).dump(2) + "\n"))
+            return {500, {{"error", "cannot write the package file"}}};
+        load_catalog();
+        return {200, {{"saved", true}}};
+    }
+
+    // Deletes the downloaded files of a package (its files and packed outputs). Files the loaded
+    // model uses are refused; the package stays listed so it can be downloaded again.
+    std::pair<int, json> delete_files(const std::string& id) {
+        json package;
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            const json* found = find_package(id);
+            if (!found)
+                return {404, {{"error", "unknown package"}}};
+            if (active_ == id || queue_position(id) > 0)
+                return {409, {{"error", "stop its download first"}}};
+            package = *found;
+        }
+        std::vector<std::string> paths;
+        for (const auto& component : plan_package(package).components)
+            if (component.value("installed", false))
+                paths.push_back(component.value("path", ""));
+        {
+            std::shared_lock<std::shared_mutex> lock(runtime_->models->model_mutex);
+            for (auto it = runtime_->models->current_files.begin(); it != runtime_->models->current_files.end(); ++it)
+                if (std::find(paths.begin(), paths.end(), it.value().get<std::string>()) != paths.end())
+                    return {409, {{"error", it.value().get<std::string>() + " is part of the loaded model; switch to another model first"}}};
+        }
+        json deleted = json::array();
+        for (const auto& path : paths) {
+            if (!check_model_path(path).empty())
+                continue;
+            std::error_code error;
+            if (fs::remove(primary_root() / fs::u8path(path), error))
+                deleted.push_back(path);
+        }
+        refresh_model_catalog(*runtime_);
+        set_state(id, [](PackageState& s) { s = PackageState{}; });
+        return {200, {{"deleted", deleted}}};
+    }
+
+    // Removes a package added from the UI (its custom-*.json file). Downloaded files stay.
+    std::pair<int, std::string> remove_custom(const std::string& id) {
+        {
+            std::lock_guard<std::mutex> lock(mutex_);
+            const json* package = find_package(id);
+            if (!package)
+                return {404, "unknown package"};
+            if (package->value("source", "") != id + ".json")
+                return {400, "only packages added or edited on this page can be removed or reset"};
+            if (active_ == id || queue_position(id) > 0)
+                return {409, "stop the download first"};
+            states_.erase(id);
+        }
+        std::error_code error;
+        fs::remove(primary_root() / "downloads" / (id + ".json"), error);
+        load_catalog();
+        return {error ? 500 : 200, error ? error.message() : ""};
+    }
+
+    void reload() { load_catalog(); }
 
     json list() {
         load_catalog();
@@ -222,6 +577,8 @@ public:
             item.erase("files");
             item.erase("convert");
             item.erase("recipes");
+            if (package.contains("guide"))
+                item["guide"] = resolve_guide(package);
             const auto plan   = plan_package(package);
             item["installed"] = plan.missing_bytes == 0 && plan.pending_converts == 0;
             item["size"]           = plan.total_bytes;
@@ -242,7 +599,11 @@ public:
             };
             items.push_back(std::move(item));
         }
-        return {{"packages", items}, {"errors", errors_}, {"ram_gb", total_ram_gb()}, {"model_root", primary_root().u8string()}};
+        return {{"packages", items},
+                {"errors", errors_},
+                {"ram_gb", total_ram_gb()},
+                {"model_root", primary_root().u8string()},
+                {"catalog", online_status_}};
     }
 
     std::string enqueue(const std::string& id) {
@@ -287,6 +648,8 @@ private:
     std::mutex mutex_;
     std::condition_variable cv_;
     std::thread worker_;
+    std::thread online_;
+    json online_status_ = {{"state", "checking"}};
     std::deque<std::string> queue_;
     std::string active_;
     std::atomic<bool> cancel_{false};
@@ -299,6 +662,8 @@ private:
         const auto roots = get_model_roots(*runtime_->svr_params);
         return roots.empty() ? fs::path("models") : roots.front().path;
     }
+
+    fs::path online_cache_path() const { return primary_root() / "downloads" / ".online-catalog.json"; }
 
     fs::path staging_dir(const std::string& package, const std::string& step) const {
         return primary_root() / "downloads" / ".staging" / package / step;
@@ -331,23 +696,36 @@ private:
                     errors.push_back({{"file", source}, {"message", "each package needs an id and a name"}});
                     continue;
                 }
+                if (auto problem = check_package(package); !problem.empty()) {
+                    errors.push_back({{"file", source}, {"message", problem}});
+                    continue;
+                }
                 auto existing = std::find_if(packages.begin(), packages.end(),
                                              [&](const json& p) { return p["id"] == package["id"]; });
                 json item      = package;
                 item["source"] = source;
-                if (existing != packages.end())
+                item.erase("overrides");
+                if (existing != packages.end()) {
+                    const std::string previous = existing->value("overrides", existing->value("source", ""));
+                    if ((previous == "builtin" || previous == "online") && source != "builtin" && source != "online")
+                        item["overrides"] = previous;
                     *existing = std::move(item);
+                }
                 else
                     packages.push_back(std::move(item));
             }
         };
         for (const char* builtin : k_builtin_downloads)
             add(json::parse(builtin), "builtin");
+        // Online entries replace built-in ones with the same id; user files replace both.
+        if (fs::is_regular_file(online_cache_path()))
+            add(json::parse(read_text_file(online_cache_path()), nullptr, false), "online");
         std::error_code error;
         const fs::path user_dir = primary_root() / "downloads";
         if (fs::is_directory(user_dir, error)) {
             for (const auto& entry : fs::directory_iterator(user_dir, error)) {
-                if (!entry.is_regular_file() || entry.path().extension() != ".json")
+                if (!entry.is_regular_file() || entry.path().extension() != ".json" ||
+                    entry.path().filename().u8string().front() == '.')
                     continue;
                 std::ifstream file(entry.path(), std::ios::binary);
                 const json catalog = json::parse(file, nullptr, false);
@@ -389,13 +767,35 @@ private:
         return "";
     }
 
+    // A guide's inputs may name a packing step as "{step}"; that becomes the file it produces.
+    json resolve_guide(const json& package) const {
+        json guide = package.at("guide");
+        if (!guide.contains("inputs") || !guide["inputs"].is_object())
+            return guide;
+        for (auto it = guide["inputs"].begin(); it != guide["inputs"].end(); ++it) {
+            if (!it.value().is_string())
+                continue;
+            const std::string value = it.value().get<std::string>();
+            if (value.size() < 3 || value.front() != '{' || value.back() != '}')
+                continue;
+            for (const auto& convert : package.value("convert", json::array()))
+                if (convert.value("id", "") == value.substr(1, value.size() - 2)) {
+                    const std::string done = existing_output(convert);
+                    it.value()             = done.empty() ? output_for(convert, pick_type(convert)) : done;
+                }
+        }
+        return guide;
+    }
+
     Plan plan_package(const json& package) const {
         Plan plan;
         const fs::path root = primary_root();
         for (const auto& file : package.value("files", json::array())) {
             DownloadFile item{file.value("url", ""), file.value("sha256", ""), file.value("size", uintmax_t(0)),
                               root / fs::u8path(file.value("path", "")), file.value("path", "")};
-            const bool present = file_size_or_zero(item.target) == item.size && item.size > 0;
+            // Files of unknown size (links without size information) count as present once they exist.
+            const uintmax_t on_disk = file_size_or_zero(item.target);
+            const bool present      = item.size > 0 ? on_disk == item.size : on_disk > 0;
             plan.total_bytes += item.size;
             plan.components.push_back({{"path", item.label}, {"size", item.size}, {"installed", present}});
             if (!present) {
@@ -450,7 +850,9 @@ private:
                     last = now_size, time = now;
                 }
             });
-            std::string result = run_curl(file.url, part, cancel_);
+            std::string result = run_curl({"-L", "--fail", "--retry", "5", "--retry-delay", "3", "-sS", "-C", "-", "-o",
+                                           part.u8string(), file.url},
+                                          &cancel_);
             finished.store(true);
             meter.join();
             if (!result.empty())
@@ -548,23 +950,6 @@ private:
             outputs[step] = output;
         }
 
-        for (auto recipe : package.value("recipes", json::array())) {
-            if (recipe.contains("models"))
-                for (auto it = recipe["models"].begin(); it != recipe["models"].end(); ++it)
-                    if (auto& file = it.value(); file.is_string()) {
-                        std::string value = file.get<std::string>();
-                        if (value.size() > 2 && value.front() == '{' && value.back() == '}' &&
-                            outputs.count(value.substr(1, value.size() - 2)))
-                            file = outputs[value.substr(1, value.size() - 2)];
-                    }
-            const fs::path path = primary_root() / "recipes" / (recipe.value("id", "recipe") + ".json");
-            std::error_code error;
-            if (fs::exists(path, error))
-                continue;
-            fs::create_directories(path.parent_path(), error);
-            std::ofstream out(path, std::ios::binary);
-            out << recipe.dump(2) << "\n";
-        }
         std::error_code error;
         fs::remove(primary_root() / "downloads" / ".staging" / id, error);
         return "";
@@ -639,8 +1024,58 @@ void register_download_endpoints(httplib::Server& svr, ServerRuntime& runtime) {
         res.status              = error.empty() ? 200 : 404;
         res.set_content(error.empty() ? R"({"cancel_requested":true})" : json({{"error", error}}).dump(), "application/json");
     });
+    svr.Delete(R"(/sdcpp/v1/downloads/([A-Za-z0-9_.\-]+))", [](const httplib::Request& req, httplib::Response& res) {
+        const auto [status, error] = manager().remove_custom(req.matches[1]);
+        res.status                 = status;
+        res.set_content(error.empty() ? R"({"removed":true})" : json({{"error", error}}).dump(), "application/json");
+    });
+    svr.Delete(R"(/sdcpp/v1/downloads/([A-Za-z0-9_.\-]+)/files)", [](const httplib::Request& req, httplib::Response& res) {
+        const auto [status, result] = manager().delete_files(req.matches[1]);
+        res.status                  = status;
+        res.set_content(result.dump(), "application/json");
+    });
+    svr.Get(R"(/sdcpp/v1/downloads/([A-Za-z0-9_.\-]+)/definition)", [](const httplib::Request& req, httplib::Response& res) {
+        const auto [status, result] = manager().definition(req.matches[1]);
+        res.status                  = status;
+        res.set_content(result.dump(), "application/json");
+    });
+    svr.Put(R"(/sdcpp/v1/downloads/([A-Za-z0-9_.\-]+))", [](const httplib::Request& req, httplib::Response& res) {
+        const auto [status, result] = manager().save_package(req.matches[1], json::parse(req.body, nullptr, false));
+        res.status                  = status;
+        res.set_content(result.dump(), "application/json");
+    });
+    svr.Post("/sdcpp/v1/download-catalog/refresh", [](const httplib::Request&, httplib::Response& res) {
+        res.set_content(manager().refresh_online_catalog().dump(), "application/json");
+    });
+    svr.Post("/sdcpp/v1/download-catalog/custom", [](const httplib::Request& req, httplib::Response& res) {
+        const json body = json::parse(req.body, nullptr, false);
+        if (!body.is_object()) {
+            res.status = 400;
+            res.set_content(R"({"error":"expected a JSON object"})", "application/json");
+            return;
+        }
+        const auto [status, result] = manager().add_custom(body);
+        res.status                  = status;
+        res.set_content(result.dump(), "application/json");
+    });
 }
 
 void stop_downloads() {
     manager().stop();
+}
+
+std::string check_download_catalog(const json& catalog) {
+    if (!catalog.is_object() || !catalog.contains("packages") || !catalog["packages"].is_array())
+        return "expected an object with a packages array";
+    for (const auto& package : catalog["packages"]) {
+        if (!package.is_object() || package.value("id", "").empty() || package.value("name", "").empty())
+            return "each package needs an id and a name";
+        if (auto problem = check_package(package); !problem.empty())
+            return problem;
+    }
+    return "";
+}
+
+void reload_download_catalog() {
+    manager().reload();
 }

@@ -3,33 +3,99 @@ import { computed, ref, watch } from "vue";
 
 import Icon from "../components/Icon.vue";
 import MediaView from "../components/MediaView.vue";
+import PresetEditor from "../components/PresetEditor.vue";
+import { categoryLabel } from "../lib/categories";
+import { confirmDanger } from "../lib/confirm";
 import {
     activeJobs,
     cancel,
+    chooseFile,
     currentRecipe,
     deleteOutput,
     estimateTotalSeconds,
     eta,
     formatDuration,
+    hasFileChanges,
+    missingFiles,
     newCreation,
     plan,
     readyRecipes,
     recipeIsVideo,
     remainingSeconds,
+    resetFileChoices,
     reuse,
+    selectedFiles,
     stageLabels,
     state,
     submit,
 } from "../lib/store";
 import type { Aspect } from "../lib/store";
-import type { OutputEntry } from "../lib/types";
+import type { OutputEntry, Recipe } from "../lib/types";
 
 const emit = defineEmits<{ (e: "open-models"): void; (e: "open-gallery"): void }>();
 
 const form = state.form;
 const aspects: Aspect[] = ["16:9", "4:3", "1:1", "9:16"];
 const submitting = ref(false);
-const confirmDelete = ref(false);
+const savingPreset = ref<Recipe | null>(null);
+const filesOpen = ref(false);
+
+// Ready presets as cards, plus the current one when it was picked from "Other model" and still needs files.
+const modelCards = computed(() => {
+    const cards = [...readyRecipes.value];
+    if (currentRecipe.value && !cards.some((r) => r.id === currentRecipe.value!.id)) cards.push(currentRecipe.value);
+    return cards;
+});
+const otherModels = computed(() => {
+    const ready = new Set(readyRecipes.value.map((r) => r.id));
+    const rest = state.recipes.filter((r) => !ready.has(r.id)).sort((a, b) => a.name.localeCompare(b.name));
+    return { mine: rest.filter((r) => r.source === "user"), builtin: rest.filter((r) => r.source !== "user") };
+});
+
+function filesFor(categories: string[] | undefined) {
+    const allowed = new Set(categories || []);
+    return state.files.filter((f) => allowed.has(f.category)).sort((a, b) => (a.name || a.id).localeCompare(b.name || b.id));
+}
+
+function pickOther(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    if (select.value) {
+        form.recipeId = select.value;
+        filesOpen.value = true;
+    }
+    select.value = "";
+}
+
+function onFilesToggle(event: Event) {
+    filesOpen.value = (event.target as HTMLDetailsElement).open;
+}
+
+function onFileChange(slot: string, event: Event) {
+    chooseFile(slot, (event.target as HTMLSelectElement).value);
+}
+
+function typeText(slot: { categories?: string[] }) {
+    return (slot.categories || []).map(categoryLabel).join(" / ");
+}
+
+function slotLabel(id: string) {
+    return currentRecipe.value?.slots.find((s) => s.id === id)?.label || id;
+}
+
+const requiredAnyText = computed(() =>
+    (currentRecipe.value?.required_any || []).map((group) => group.map(slotLabel).join(" or ")).join("; "),
+);
+
+function saveAsPreset() {
+    if (!currentRecipe.value) return;
+    const models: Record<string, string> = {};
+    for (const [slot, file] of Object.entries(selectedFiles.value)) if (file) models[slot] = file;
+    savingPreset.value = { ...currentRecipe.value, models };
+}
+
+function onPresetSaved(id: string) {
+    form.recipeId = id;
+}
 
 const isVideoModel = computed(() => recipeIsVideo(currentRecipe.value));
 watch(isVideoModel, (video) => {
@@ -86,14 +152,11 @@ function randomizeSeed() {
     form.lockSeed = true;
 }
 
-watch(shown, () => {
-    confirmDelete.value = false;
-});
-
 async function removeShown() {
-    if (!shown.value) return;
-    await deleteOutput(shown.value);
-    confirmDelete.value = false;
+    const output = shown.value;
+    if (!output) return;
+    const ok = await confirmDanger("Delete this result?", `${output.file} will be removed from the gallery and from disk. This cannot be undone.`, "Delete");
+    if (ok) await deleteOutput(output);
 }
 
 function resetAdvanced() {
@@ -114,7 +177,7 @@ function resetAdvanced() {
                 <button class="btn-secondary new-btn" type="button" title="Clear the prompt and preview" @click="newCreation"><Icon name="create" :size="16" />New</button>
             </header>
 
-            <div v-if="!readyRecipes.length" class="panel no-models">
+            <div v-if="!state.files.length" class="panel no-models">
                 <Icon name="models" :size="28" />
                 <p>No models are ready yet.</p>
                 <button class="btn" type="button" @click="emit('open-models')"><Icon name="download" />Get models</button>
@@ -125,7 +188,7 @@ function resetAdvanced() {
                     <span>Model</span>
                     <div class="models">
                         <button
-                            v-for="recipe in readyRecipes"
+                            v-for="recipe in modelCards"
                             :key="recipe.id"
                             type="button"
                             class="model"
@@ -136,7 +199,18 @@ function resetAdvanced() {
                             <small>{{ recipe.defaults?.steps ?? "?" }} steps · {{ recipe.defaults?.width }}×{{ recipe.defaults?.height }}</small>
                         </button>
                     </div>
-                    <button class="link" type="button" @click="emit('open-models')">More models…</button>
+                    <div class="model-more">
+                        <select class="input" aria-label="Other model" @change="pickOther">
+                            <option value="">Other model… (pick its files yourself)</option>
+                            <optgroup v-if="otherModels.mine.length" label="Your configs (files missing)">
+                                <option v-for="r in otherModels.mine" :key="r.id" :value="r.id">{{ r.name }}</option>
+                            </optgroup>
+                            <optgroup label="Built-in model types">
+                                <option v-for="r in otherModels.builtin" :key="r.id" :value="r.id">{{ r.name }}</option>
+                            </optgroup>
+                        </select>
+                        <button class="link" type="button" @click="emit('open-models')">Get more models…</button>
+                    </div>
                 </div>
 
                 <div class="segmented" role="group" aria-label="Output type">
@@ -147,6 +221,34 @@ function resetAdvanced() {
                         <Icon name="image" :size="16" /> Image
                     </button>
                 </div>
+
+                <details class="files-box" :open="filesOpen || missingFiles.length > 0" @toggle="onFilesToggle">
+                    <summary>
+                        Model files
+                        <span v-if="missingFiles.length" class="chip chip--danger">{{ missingFiles.length }} missing</span>
+                        <span v-else-if="hasFileChanges" class="chip chip--accent">changed</span>
+                        <span v-else class="faint small">from the config</span>
+                        <Icon name="chevron" :size="14" />
+                    </summary>
+                    <div class="files-body">
+                        <label v-for="slot in currentRecipe?.slots || []" :key="slot.id" class="field">
+                            <span>
+                                {{ slot.label || slot.id }}
+                                <em :class="slot.required ? 'req' : 'faint'">{{ slot.required ? "required" : "optional" }}</em>
+                                <em v-if="typeText(slot) !== (slot.label || slot.id)" class="faint">{{ typeText(slot) }}</em>
+                            </span>
+                            <select class="input" :value="selectedFiles[slot.id] || ''" @change="onFileChange(slot.id, $event)">
+                                <option value="">{{ slot.required ? "— choose a file —" : "— none —" }}</option>
+                                <option v-for="f in filesFor(slot.categories)" :key="f.id" :value="f.id">{{ f.name || f.id }}</option>
+                            </select>
+                        </label>
+                        <p v-if="requiredAnyText" class="faint small">Needs at least one of: {{ requiredAnyText }}.</p>
+                        <div class="files-actions">
+                            <button class="link" type="button" :disabled="!hasFileChanges" @click="resetFileChoices">Use the config's files</button>
+                            <button class="link" type="button" :disabled="missingFiles.length > 0" @click="saveAsPreset">Save as model config…</button>
+                        </div>
+                    </div>
+                </details>
 
                 <label class="field">
                     <span>Prompt</span>
@@ -222,13 +324,15 @@ function resetAdvanced() {
                         <span>{{ plan.steps }} steps</span>
                         <span v-if="estimate != null" class="accent">{{ eta(estimate) }}</span>
                     </div>
+                    <p v-if="missingFiles.length" class="status-message status-message--error">Choose a file for: {{ missingFiles.join(", ") }} (Model files above).</p>
                     <p v-if="state.error" class="status-message status-message--error">{{ state.error }}</p>
-                    <button class="btn btn-lg" type="button" :disabled="!form.prompt.trim() || submitting" @click="generate">
+                    <button class="btn btn-lg" type="button" :disabled="!form.prompt.trim() || submitting || missingFiles.length > 0" @click="generate">
                         <Icon name="sparkles" />
                         {{ activeJobs.length ? `Add to queue (${activeJobs.length} ahead)` : "Generate" }}
                     </button>
                 </div>
             </template>
+            <PresetEditor v-if="savingPreset" :base="savingPreset" mode="copy" @close="savingPreset = null" @saved="onPresetSaved" />
         </section>
 
         <section class="stage" aria-label="Preview">
@@ -266,8 +370,7 @@ function resetAdvanced() {
                             <span class="spacer" />
                             <button class="btn-ghost" type="button" @click="reuse(shown)"><Icon name="reuse" :size="16" />Reuse</button>
                             <a class="btn-ghost" :href="shown.url" :download="shown.file"><Icon name="download" :size="16" />Save</a>
-                            <button v-if="!confirmDelete" class="btn-ghost btn-danger" type="button" @click="confirmDelete = true"><Icon name="trash" :size="16" />Delete</button>
-                            <button v-else class="btn-secondary btn-danger" type="button" @click="removeShown">Delete permanently?</button>
+                            <button class="btn-ghost btn-danger" type="button" @click="removeShown"><Icon name="trash" :size="16" />Delete</button>
                             <button class="btn-ghost icon-btn" type="button" title="Close preview" aria-label="Close preview" @click="state.createSelected = null; state.lastCompleted = null"><Icon name="close" :size="16" /></button>
                         </div>
                     </div>
@@ -408,6 +511,70 @@ function resetAdvanced() {
     float: right;
     color: var(--text);
     font-weight: 600;
+}
+
+.model-more {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+    gap: 10px;
+}
+
+.files-box {
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    padding: 10px 12px;
+    background: var(--bg-raised);
+}
+
+.files-box summary {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-weight: 600;
+    font-size: 13px;
+    color: var(--text-2);
+    cursor: pointer;
+    list-style: none;
+}
+
+.files-box summary::-webkit-details-marker {
+    display: none;
+}
+
+.files-box summary svg {
+    margin-left: auto;
+}
+
+.files-box[open] summary svg {
+    transform: rotate(90deg);
+}
+
+.files-body {
+    display: grid;
+    gap: 12px;
+    margin-top: 12px;
+}
+
+.files-body em {
+    font-style: normal;
+    font-weight: 500;
+    margin-left: 4px;
+}
+
+.files-body .req {
+    color: var(--accent-strong);
+}
+
+.files-actions {
+    display: flex;
+    justify-content: space-between;
+    gap: 10px;
+}
+
+.small {
+    font-size: 12px;
+    margin: 0;
 }
 
 .advanced {
