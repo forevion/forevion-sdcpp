@@ -4,7 +4,7 @@
 and HTTP APIs. Download or build the server before starting; see the
 [build guide](../../docs/build.md) and [frontend build instructions](#build-with-frontend).
 
-- [Web UI](#web-ui): set up on Linux with one script, start the server, get models, and generate.
+- [Web UI](#web-ui): ready-built packages, one-script Linux setup, starting the server, getting models, and generating.
 - [Model management](#model-management): model directories, recipes, and startup models.
 - [Server configuration](#server-configuration): launcher settings, network, logging, and help.
 - [API](#api): native and compatibility endpoints.
@@ -22,9 +22,23 @@ server-local defaults.
 
 ## Web UI
 
+### Ready-built packages
+
+Each merge into `master` publishes a `studio-<date>-<commit>` release on the
+[releases page](https://github.com/forevion/forevion-sdcpp/releases) with CPU builds that
+include the Web UI. One package runs on any x86-64 CPU and picks the fastest code path
+(AVX2, AVX-512, ...) when it starts:
+
+| Package | Runs on | Start |
+| --- | --- | --- |
+| `sdcpp-studio-windows-x64.zip` | Windows 10/11 | Unzip, double-click `start-studio.bat` |
+| `sdcpp-studio-linux-x64.tar.gz` | glibc 2.35+ (Ubuntu 22.04+, Zorin OS 17+, Debian 12+) | `./setup-sdcpp.sh` (also inside the archive) |
+
+`SHA256SUMS.txt` in each release lists the checksums.
+
 ### Quick start on Linux
 
-On Debian/Ubuntu-based systems (for example Zorin OS), one script sets up and starts
+On Debian/Ubuntu-based systems (for example Zorin OS), one script installs and starts
 everything. Put it in an empty folder and run it:
 
 ```sh
@@ -34,41 +48,43 @@ chmod +x setup-sdcpp.sh
 ./setup-sdcpp.sh
 ```
 
-The first run installs any missing build tools with apt (Git, CMake, Ninja, the
-compiler and curl; it asks for your password), downloads Node.js and pnpm into
-`tools/`, clones the source, builds `sd-server` for this CPU with the Web UI, starts
-it and opens the browser. Later runs check the tools, rebuild only when the source
-changed, and start the server.
+The first run downloads the latest release, checks its SHA-256, unpacks it into `app/`,
+installs the OpenMP runtime with apt if the system lacks it, starts the server and opens
+the browser. Later runs start it straight away; `--update` installs a newer release when
+there is one.
 
 ```mermaid
 flowchart TD
-    A["./setup-sdcpp.sh"] --> B["Check build tools<br/>apt installs any missing"]
-    B --> C["Node.js and pnpm<br/>downloaded into tools/"]
-    C --> D["Get the source<br/>clone, or pull with --update"]
-    D --> E{"Source changed?<br/>or no binary, or --rebuild"}
-    E -- yes --> F["Build sd-server<br/>jobs capped by free RAM"]
-    E -- no --> G{"Server already running?"}
-    F --> G
-    G -- yes --> H["Open the browser"]
-    G -- no --> I["Start sd-server<br/>browser opens when ready"]
+    A["./setup-sdcpp.sh"] --> B{"Package installed?<br/>or --update"}
+    B -- no / update --> C["Download latest release<br/>check SHA-256, unpack to app/"]
+    B -- yes --> D{"Server already running?"}
+    C --> D
+    D -- yes --> E["Open the browser"]
+    D -- no --> F["Start sd-server<br/>browser opens when ready"]
 ```
 
 Everything stays in that folder:
 
 | Folder | Contents |
 | --- | --- |
-| `stable-diffusion.cpp/` | Source |
-| `build/` | Build output (`build/bin/sd-server`, `sd-cli`) and `build.log` |
-| `tools/` | Node.js and pnpm used for the Web UI build |
+| `app/` | The installed release (`sd-server`, `sd-cli`, libraries) |
 | `models/` | Models downloaded from the Models page |
 | `outputs/` | Saved images and videos |
 
-Options: `--update` pulls the latest source and rebuilds, `--rebuild` forces a
-build, `--build-only` skips starting, `--port N` changes the port, `--lan` lets other
-devices on the network connect, `--threads N` overrides the thread count and
-`--no-browser` skips opening the browser. Run with `--help` for the full list. Run
-from inside a checkout (`scripts/setup-sdcpp.sh`), it builds that checkout into
-`build-linux/` and uses its `models/` and `output/` folders.
+Options: `--update` installs the latest release, `--setup-only` installs without
+starting, `--port N` changes the port, `--lan` lets other devices on the network connect,
+`--threads N` overrides the thread count and `--no-browser` skips opening the browser.
+Run with `--help` for the full list.
+
+**Building from source.** `--from-source` clones the `develop` branch into
+`stable-diffusion.cpp/` and builds it for this exact CPU instead: it installs Git, CMake,
+Ninja and the compiler with apt, downloads Node.js and pnpm into `tools/` for the Web UI,
+and caps parallel compile jobs at one per 2 GB of free RAM. The build goes to `build/`
+and takes several minutes the first time; later runs rebuild only when the source
+changed (`--update` pulls first, `--rebuild` forces it). The script also builds from
+source on non-x86 machines, when no release exists yet, and when it is run from inside a
+checkout (`scripts/setup-sdcpp.sh`, building into `build-linux/` and using the checkout's
+`models/` and `output/`).
 
 ### Start the server
 
