@@ -1,6 +1,7 @@
 #include "model_definition.h"
 
 #include "conditioning/conditioner.hpp"
+#include "model/diffusion/kandinsky6.hpp"
 #include "model_build_context.h"
 
 static bool build_kandinsky6(const sd::model_builders::Context& ctx,
@@ -12,8 +13,9 @@ static bool build_kandinsky6(const sd::model_builders::Context& ctx,
                                                             ctx.weight_manager, tokenizers);
     }
     if (ctx.build_diffusion) {
-        LOG_ERROR("Kandinsky 6 diffusion transformer is not supported yet");
-        return false;
+        runners.diffusion = std::make_shared<Kandinsky6::Kandinsky6Runner>(ctx.backends.runtime_backend(SDBackendModule::DIFFUSION),
+                                                                           ctx.tensor_storage_map, "model.diffusion_model",
+                                                                           ctx.weight_manager);
     }
     return true;
 }

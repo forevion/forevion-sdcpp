@@ -448,6 +448,9 @@ SDVersion ModelLoader::get_sd_version() const {
         if (tensor_storage_map.count(prefix + "model.x_embedder.proj1.weight") &&
             tensor_storage_map.count(prefix + "model.language_model.layers.0.self_attn.q_proj.weight"))
             return VERSION_HIDREAM_O1;
+        if (tensor_storage_map.count(prefix + "visual_transformer_blocks.0.va_cross_attention.to_query.weight") &&
+            tensor_storage_map.count(prefix + "video_text_embeddings.in_layer.weight"))
+            return VERSION_KANDINSKY6;
     }
     for (const std::string prefix : {"", "first_stage_model.", "vae.", "flash."}) {
         if (tensor_storage_map.count(prefix + "condition_encoder.projection.weight") &&
