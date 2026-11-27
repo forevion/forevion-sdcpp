@@ -24,7 +24,8 @@ server-local defaults.
 
 ### Ready-built packages
 
-Each merge into `master` publishes a `studio-<date>-<commit>` release on the
+Running the **Studio release** workflow by hand (Actions tab, pick `master`) publishes a
+`studio-<date>-<commit>` release on the
 [releases page](https://github.com/forevion/forevion-sdcpp/releases) with CPU builds that
 include the Web UI. One package runs on any x86-64 CPU and picks the fastest code path
 (AVX2, AVX-512, ...) when it starts:

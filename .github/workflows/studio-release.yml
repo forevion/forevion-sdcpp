@@ -1,16 +1,9 @@
 name: Studio release
 
 # Portable CPU packages of sd-server + sd-cli with the Studio Web UI built in.
-# Pull requests only build them (downloadable as workflow artifacts); a push to master
-# or a manual run also publishes them as a GitHub Release tagged studio-<date>-<commit>.
+# Runs only when started by hand (Actions tab -> Studio release -> Run workflow, pick the
+# branch, usually master) and publishes them as a GitHub Release tagged studio-<date>-<commit>.
 on:
-  push:
-    branches:
-      - master
-  pull_request:
-    branches:
-      - develop
-      - master
   workflow_dispatch:
 
 permissions:
@@ -18,7 +11,7 @@ permissions:
 
 concurrency:
   group: studio-release-${{ github.ref }}
-  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+  cancel-in-progress: false
 
 env:
   # One ggml CPU backend per instruction set (SSE4 ... AVX-512) is chosen at runtime.
@@ -125,7 +118,6 @@ jobs:
           path: sdcpp-studio-windows-x64.zip
 
   release:
-    if: ${{ github.event_name != 'pull_request' }}
     needs: [linux, windows]
     runs-on: ubuntu-latest
     permissions:
