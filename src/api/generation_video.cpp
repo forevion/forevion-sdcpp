@@ -53,7 +53,8 @@ namespace sd::api {
             throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "MiniMax-H3 flow shift must be positive");
         request.values["audio_scale"]       = h3 ? video_shift / 3.f : 1.f;
         request.fields["audio_vae_options"] = arguments(loader_options(settings, SDBackendModule::VAE, request.definition));
-        predictor_option(request, h3 ? ", audio_length = audio_shape[0], fps = fps" : ", audio_length = audio_shape[1], fps = fps");
+        const bool length_first = h3 || sd_version_is_kandinsky6(request.definition.version);
+        predictor_option(request, length_first ? ", audio_length = audio_shape[0], fps = fps" : ", audio_length = audio_shape[1], fps = fps");
         if (h3)
             predictor_option(request, ", video_sigma_shift = " + literal(video_shift));
     }
@@ -103,6 +104,9 @@ namespace sd::api {
         const bool frozen    = (version == VERSION_WAN2_2_TI2V || sd_version_is_lingbot_video(version)) && (first || last);
         const bool ltx       = sd_version_is_ltxav(version);
         const bool h3        = version == VERSION_MINIMAX_H3;
+        const bool kandinsky = sd_version_is_kandinsky6(version);
+        if (kandinsky && (first || last))
+            throw dgl::Error(SD_STATUS_UNSUPPORTED, "Kandinsky 6 image-to-video is not supported yet");
         if (!h3 && !bound_videos(request.options, "ref_videos").empty())
             throw dgl::Error(SD_STATUS_UNSUPPORTED, "reference videos require MiniMax-H3");
         if (!h3 && !s2v && !bound_audios(request.options, "ref_audios").empty())
@@ -111,8 +115,8 @@ namespace sd::api {
             throw dgl::Error(SD_STATUS_UNSUPPORTED, "Wan2.2 S2V does not support an end image");
         const bool image_condition = !vace && !s2v && request.context.model.wan_image_condition;
         request.flags              = {{"first", first}, {"last", last}, {"conditioned", first || last}, {"vace", vace}, {"vace_reference", vace && first}, {"s2v_reference", s2v && first}, {"driving_audio", false}, {"image_condition", image_condition}, {"vision", image_condition && request.context.model.wan_vision_condition}, {"end_vision", request.context.model.wan_end_vision}, {"frozen", frozen}, {"hunyuan", sd_version_is_hunyuan_video(version) && (first || last)}, {"controls", false}, {"dual", false}, {"custom_sigmas", request.image.sample_params.custom_sigmas_count > 0}};
-        request.fields["entry"]    = ltx ? "video_ltx" : h3 ? "video_h3"
-                                                            : "video_wan";
+        request.fields["entry"]    = ltx || kandinsky ? "video_ltx" : h3 ? "video_h3"
+                                                                         : "video_wan";
         if (image_condition || request.flags.at("hunyuan").get<bool>())
             predictor_option(request, ", concat = video_concat");
         if (frozen)
@@ -139,7 +143,7 @@ namespace sd::api {
             request.values["vision_path"]    = settings.clip_vision_path;
             request.fields["vision_options"] = arguments(loader_options(settings, SDBackendModule::TE, request.definition));
         }
-        if (ltx || h3) {
+        if (ltx || h3 || kandinsky) {
             audiovisual(request);
             if (ltx && (first || last)) {
                 request.values["strength"] = request.image.strength;

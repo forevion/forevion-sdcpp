@@ -48,6 +48,10 @@ namespace Kandinsky6 {
         // PyTorch nn.RMSNorm(eps=None) uses the input dtype's epsilon: 2^-23 for fp32.
         float qk_norm_eps = 1.1920929e-07f;
         float norm_eps    = 1e-5f;
+        // PiFlow policy (PiflowScheduler config of the distilled checkpoints).
+        float piflow_shift       = 5.f;
+        int piflow_substeps      = 128;
+        float piflow_eps         = 1e-6f;
 
         int64_t visual_in_channels() const { return visual_cond ? 2 * in_visual_dim + 1 : in_visual_dim; }
         int64_t n_grid() const { return out_visual_dim / in_visual_dim; }
@@ -569,6 +573,53 @@ namespace Kandinsky6 {
         return sd::Tensor<float>({2, 2, half, t_len * h_len * w_len}, std::move(values));
     }
 
+    // One PiFlow step (network-free DX policy rollout of diffusers' PiflowScheduler) for one modality.
+    // grid[g] holds the model's velocity prediction g in x's memory layout. Returns x at sigma_dst,
+    // where sigma_dst == 0 ends the rollout at raw time eps like the reference.
+    static std::vector<float> piflow_rollout(const float* x,
+                                             const std::vector<const float*>& grid,
+                                             size_t n,
+                                             float sigma_src,
+                                             float sigma_dst,
+                                             const Kandinsky6Config& config) {
+        const float shift  = config.piflow_shift;
+        const float eps    = config.piflow_eps;
+        auto unwarp        = [&](float sigma) { return sigma / (shift + (1.f - shift) * sigma); };
+        auto warp          = [&](float raw) { return shift * raw / (1.f + (shift - 1.f) * raw); };
+        const float raw_src = unwarp(sigma_src);
+        const float raw_dst = sigma_dst > 0.f ? unwarp(sigma_dst) : 0.f;
+        const float segment = std::max(raw_src - raw_dst, 0.f);
+        const float seg_size = std::max(raw_src - raw_dst, eps);
+        const float raw_end  = std::max(raw_src - segment, eps);
+        const float delta    = raw_src - raw_end;
+        const int substeps   = std::max(1, static_cast<int>(std::nearbyint(delta * static_cast<float>(config.piflow_substeps))));
+        const float substep  = delta / static_cast<float>(substeps);
+        const int n_grid     = static_cast<int>(grid.size());
+
+        std::vector<float> x_t(x, x + n);
+        float sigma_t = sigma_src;
+        float raw_t   = raw_src;
+        for (int s = 0; s < substeps; ++s) {
+            const float tt   = std::clamp((unwarp(sigma_t) - raw_dst) / seg_size, 0.f, 1.f) * static_cast<float>(n_grid - 1);
+            const int t0     = std::clamp(static_cast<int>(std::floor(tt)), 0, n_grid - 2);
+            const float w0   = static_cast<float>(t0 + 1) - tt;
+            const float w1   = tt - static_cast<float>(t0);
+            const float* v0  = grid[static_cast<size_t>(t0)];
+            const float* v1  = grid[static_cast<size_t>(t0 + 1)];
+            const float inv  = 1.f / std::max(sigma_t, eps);
+            const float raw_next   = std::max(raw_t - substep, 0.f);
+            const float sigma_next = warp(raw_next);
+            const float dt         = sigma_next - sigma_t;
+            for (size_t i = 0; i < n; ++i) {
+                const float x0 = w0 * (x[i] - sigma_src * v0[i]) + w1 * (x[i] - sigma_src * v1[i]);
+                x_t[i] += (x_t[i] - x0) * inv * dt;
+            }
+            sigma_t = sigma_next;
+            raw_t   = raw_next;
+        }
+        return x_t;
+    }
+
     struct Kandinsky6Result {
         sd::Tensor<float> video;  // [W, H, T, out_visual_dim]
         sd::Tensor<float> audio;  // [out_audio_dim, L]
@@ -673,12 +724,94 @@ namespace Kandinsky6 {
             return result;
         }
 
+        // The sampler state packs the video latent [W, H, T, C] and, in extra channels, the audio
+        // latent laid out as [L, C_audio] (as audio_latent_shape describes it). The distilled model
+        // predicts n_grid velocities per channel; the PiFlow policy turns them into the sample at the
+        // step's target sigma. The returned flow velocity (x - x_next) / (sigma - sigma_next) makes a
+        // plain Euler step land exactly on that sample.
         sd::Tensor<float> compute(int n_threads, const DiffusionParams& diffusion_params) override {
             GGML_ASSERT(diffusion_params.x != nullptr && diffusion_params.timesteps != nullptr);
-            GGML_ASSERT(diffusion_params.context != nullptr && diffusion_params.y != nullptr);
-            return compute_av(n_threads, *diffusion_params.x, *diffusion_params.timesteps, *diffusion_params.context,
-                              *diffusion_params.y, {}, tensor_or_empty(diffusion_params.c_concat))
-                .video;
+            if (diffusion_params.context == nullptr || diffusion_params.y == nullptr) {
+                throw std::runtime_error("Kandinsky 6 requires Qwen2.5-VL token embeddings and a CLIP-L pooled vector");
+            }
+            const auto* extra = diffusion_extra_as<Kandinsky6DiffusionExtra>(diffusion_params);
+            if (!std::isfinite(extra->target_sigma)) {
+                throw std::runtime_error("Kandinsky 6 PiFlow sampling needs the step's target sigma; use the euler method");
+            }
+            const auto& x            = *diffusion_params.x;
+            const int64_t W          = x.shape()[0];
+            const int64_t H          = x.shape()[1];
+            const int64_t T          = x.shape()[2];
+            const int64_t C          = config.in_visual_dim;
+            const int64_t spatial    = W * H * T;
+            const int64_t channels   = x.shape()[3];
+            const int64_t audio_len  = extra->audio_length;
+            const int64_t audio_dim  = config.in_audio_dim;
+            const size_t video_n     = static_cast<size_t>(C * spatial);
+            const size_t audio_n     = static_cast<size_t>(audio_len * audio_dim);
+            const float sigma        = diffusion_params.timesteps->data()[0] / 1000.f;
+            const float sigma_target = extra->target_sigma;
+            if (channels < C || (channels - C) * spatial < static_cast<int64_t>(audio_n) || sigma <= sigma_target) {
+                throw std::runtime_error("Kandinsky 6 latent does not match its audio length or schedule");
+            }
+
+            sd::Tensor<float> video({W, H, T, C});
+            std::copy_n(x.data(), video_n, video.data());
+            sd::Tensor<float> audio_tl;  // [L, C_audio] as packed in the sampler state
+            sd::Tensor<float> audio;     // [C_audio, L] as the model consumes it
+            if (audio_n > 0) {
+                audio_tl = sd::Tensor<float>({audio_len, audio_dim});
+                audio    = sd::Tensor<float>({audio_dim, audio_len});
+                std::copy_n(x.data() + video_n, audio_n, audio_tl.data());
+                for (int64_t c = 0; c < audio_dim; ++c) {
+                    for (int64_t l = 0; l < audio_len; ++l) {
+                        audio.data()[l * audio_dim + c] = audio_tl.data()[c * audio_len + l];
+                    }
+                }
+            }
+
+            auto out = compute_av(n_threads, video, *diffusion_params.timesteps, *diffusion_params.context,
+                                  *diffusion_params.y, audio, tensor_or_empty(diffusion_params.c_concat));
+            if (out.video.empty() || (audio_n > 0 && out.audio.empty())) {
+                return {};
+            }
+
+            const int64_t n_grid = config.n_grid();
+            const float dt_inv   = 1.f / (sigma - sigma_target);
+            sd::Tensor<float> result(x.shape());
+            std::fill_n(result.data(), static_cast<size_t>(result.numel()), 0.f);
+
+            std::vector<const float*> grid;
+            for (int64_t g = 0; g < n_grid; ++g) {
+                grid.push_back(out.video.data() + g * static_cast<int64_t>(video_n));
+            }
+            auto next = piflow_rollout(video.data(), grid, video_n, sigma, sigma_target, config);
+            for (size_t i = 0; i < video_n; ++i) {
+                result.data()[i] = (video.data()[i] - next[i]) * dt_inv;
+            }
+
+            if (audio_n > 0) {
+                // Model output [n_grid * C_audio, L] -> per-grid arrays in the packed [L, C_audio] layout.
+                std::vector<float> audio_grid(static_cast<size_t>(n_grid) * audio_n);
+                const int64_t out_dim = config.out_audio_dim;
+                for (int64_t g = 0; g < n_grid; ++g) {
+                    for (int64_t c = 0; c < audio_dim; ++c) {
+                        for (int64_t l = 0; l < audio_len; ++l) {
+                            audio_grid[static_cast<size_t>(g) * audio_n + static_cast<size_t>(c * audio_len + l)] =
+                                out.audio.data()[l * out_dim + g * audio_dim + c];
+                        }
+                    }
+                }
+                grid.clear();
+                for (int64_t g = 0; g < n_grid; ++g) {
+                    grid.push_back(audio_grid.data() + static_cast<size_t>(g) * audio_n);
+                }
+                next = piflow_rollout(audio_tl.data(), grid, audio_n, sigma, sigma_target, config);
+                for (size_t i = 0; i < audio_n; ++i) {
+                    result.data()[video_n + i] = (audio_tl.data()[i] - next[i]) * dt_inv;
+                }
+            }
+            return result;
         }
     };
 }  // namespace Kandinsky6

@@ -43,7 +43,7 @@ namespace sd::vae {
         if (sd_version_is_ltxav(version))
             return int(sd::align_video_frame_count(frames, 8));
         if (sd_version_is_wan(version) || sd_version_is_lingbot_video(version) ||
-            sd_version_is_hunyuan_video(version) || version == VERSION_SEEDVR2)
+            sd_version_is_hunyuan_video(version) || version == VERSION_SEEDVR2 || sd_version_is_kandinsky6(version))
             return int(sd::align_video_frame_count(frames, 4));
         return frames;
     }

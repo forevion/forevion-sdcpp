@@ -92,7 +92,8 @@ namespace sd::dgl::models {
             latent_frames = ((frames - 1) / 8) + 1;
         } else if (sd_version_is_minimax_h3(version())) {
             latent_frames = frames <= 5 ? 2 : ((frames - 5) / 17) * 5 + 2;
-        } else if (sd_version_is_wan(version()) || sd_version_is_lingbot_video(version()) || sd_version_is_hunyuan_video(version()) || version() == VERSION_SEEDVR2) {
+        } else if (sd_version_is_wan(version()) || sd_version_is_lingbot_video(version()) || sd_version_is_hunyuan_video(version()) || version() == VERSION_SEEDVR2 ||
+                   sd_version_is_kandinsky6(version())) {
             latent_frames = ((frames - 1) / 4) + 1;
         }
         return latent_frames;
