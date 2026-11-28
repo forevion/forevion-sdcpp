@@ -1357,7 +1357,7 @@ std::string convert_diffusers_to_original_wan_vae(std::string name, bool qwen_im
 
 std::string convert_first_stage_model_name(std::string name, std::string prefix, SDVersion version) {
     if (sd_version_is_hunyuan_video(version) || sd_version_is_mage_flow(version) || sd_version_is_minimax_h3(version) || version == VERSION_SEEDVR2 ||
-        sd_version_is_kandinsky6(version)) {
+        sd_version_is_kandinsky6(version) || sd_version_is_kandinsky6_vsr(version)) {
         return name;
     }
     if (sd_version_uses_wan_vae(version)) {

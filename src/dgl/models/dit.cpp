@@ -397,7 +397,7 @@ namespace sd::dgl::models {
                                                    options.audio_length, options.video_sigma_shift, options.audio_sigma_shift, step.target_sigma};
         } else if (sd_version_is_ltxav(version())) {
             params.extra = LTXAVDiffusionExtra{nullptr, present(audio_time), options.audio_length, options.fps, present(options.video_positions), first(condition.extra_c_crossattns)};
-        } else if (sd_version_is_kandinsky6(version())) {
+        } else if (sd_version_is_kandinsky6(version()) || sd_version_is_kandinsky6_vsr(version())) {
             params.extra = Kandinsky6DiffusionExtra{options.audio_length, step.target_sigma};
         } else if (sd_version_is_minit2i(version())) {
             params.extra = MiniT2IDiffusionExtra{params.y};

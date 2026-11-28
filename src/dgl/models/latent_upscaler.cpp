@@ -3,6 +3,7 @@
 #include "core/image_geometry.h"
 #include "dgl/models/component_sources.h"
 #include "model/upscaler/h3_latent_upscaler.hpp"
+#include "model/upscaler/kandinsky6_latent_upscaler.hpp"
 #include "model/upscaler/ltx_latent_upscaler.hpp"
 
 namespace sd::dgl::models {
@@ -23,6 +24,20 @@ namespace sd::dgl::models {
         const auto backend      = runtime_.backend_for();
         const auto linear_scale = runtime_.params.linear_scale;
         const auto attn_scale   = runtime_.params.attn_scale;
+        if (sd_version_is_kandinsky6_vsr(runtime_.version)) {
+            // model_args "scale=2" or "scale=4" loads one model of the bank to halve its memory.
+            int only_scale = 0;
+            for (const auto& [key, value] : parse_key_value_args(runtime_.params.model_args.c_str(), "model arg")) {
+                if (key != "scale")
+                    continue;
+                if (value != "2" && value != "4")
+                    throw std::runtime_error("Kandinsky 6 latent upscaler model_args take scale=2 or scale=4");
+                only_scale = std::stoi(value);
+            }
+            k6_ = std::make_shared<Kandinsky6Upscaler::UpscalerRunner>(backend, weights, "k6_latent_upscaler", model_weights, only_scale);
+            k6_->set_scale_overrides(linear_scale, attn_scale);
+            return runtime_.register_runner_params(runtime_.component, k6_);
+        }
         if (sd_version_is_ltxav(runtime_.version)) {
             ltx_ = std::make_shared<LTXVUpsampler::LatentUpsamplerRunner>(backend, weights, "ltx_latent_upsampler", model_weights);
             if (!ltx_->model)
@@ -40,6 +55,14 @@ namespace sd::dgl::models {
     }
 
     Tensor<float> LatentUpscaler::upscale(const Tensor<float>& latent, int64_t width, int64_t height) {
+        if (k6_) {
+            if (latent.empty() || latent.dim() < 4 || latent.shape()[3] != k6_->config.in_channels)
+                throw std::runtime_error("Kandinsky 6 latent upscaling requires a [W,H,T,64] K-VAE latent");
+            const int64_t scale = width ? width / latent.shape()[0] : 2;
+            if ((width && width != scale * latent.shape()[0]) || (height && height != scale * latent.shape()[1]))
+                throw std::runtime_error("Kandinsky 6 latent upscaler targets must be 2x or 4x the latent size on both axes");
+            return k6_->compute(n_threads, latent, int(scale));
+        }
         const auto channels = ltx_ ? ltx_->config.in_channels : h3_->config.in_channels;
         const auto rank     = latent.dim();
         if (latent.empty() || (rank != 4 && rank != 5) ||

@@ -10,12 +10,16 @@ namespace H3VUpsampler {
 namespace LTXVUpsampler {
     struct LatentUpsamplerRunner;
 }
+namespace Kandinsky6Upscaler {
+    struct UpscalerRunner;
+}
 
 namespace sd::dgl::models {
     class LatentUpscaler final : public Model {
         ModelRuntime runtime_;
         std::shared_ptr<LTXVUpsampler::LatentUpsamplerRunner> ltx_;
         std::shared_ptr<H3VUpsampler::H3LatentUpscalerRunner> h3_;
+        std::shared_ptr<Kandinsky6Upscaler::UpscalerRunner> k6_;
 
         bool refresh_weights() override { return runtime_.refresh_weights(); }
         bool attach_loras() override { return runtime_.attach_loras(); }

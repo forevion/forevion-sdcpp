@@ -89,6 +89,7 @@ and [NumPy tensor files](../dgl.md#tensor-files).
 | [AnimateDiff – image to video](../models/animatediff.md) | [Generate the initial image](animatediff/realisticvision-v6-txt2img.dgl) · [Image to video](animatediff/animatediff-realisticvision-v6-img2video.dgl) |
 | [HunyuanVideo 1.5](../models/hunyuan_video.md) | [720p text to video](hunyuan_video/hunyuanvideo1-5-720p-txt2video.dgl) |
 | [Kandinsky 6](../models/kandinsky6.md) | [Lite distill text to video](kandinsky6/kandinsky6-lite-distill-txt2video.dgl) · [Lite distill image to video](kandinsky6/kandinsky6-lite-distill-img2video.dgl) · [Lite text to video with CFG](kandinsky6/kandinsky6-lite-txt2video.dgl) |
+| [Kandinsky 6 VSR](../models/kandinsky6_vsr.md) | [Upscale a video](kandinsky6/kandinsky6-vsr-upscale.dgl) |
 | [LingBot-Video](../models/lingbot_video.md) | [Dens 1.3B text to video](lingbot_video/lingbot-video-dens-1-3b-txt2video.dgl) |
 | [LTX-2.3](../models/ltx2.md) | [2.3 text to video](ltx2/ltx-2-3-dev-txt2video.dgl) · [2.3 image to video](ltx2/ltx-2-3-dev-img2video.dgl) · [2.3 first/last frames](ltx2/ltx-2-3-dev-first-last-frame.dgl) · [2.3 spatial latent upscale](ltx2/ltx-2-3-spatial-upscale.dgl) |
 | [LTX-2.5](../models/ltx2.md) | [2.5 text to video](ltx2/ltx-2-5-dev-txt2video.dgl) · [2.5 image to video](ltx2/ltx-2-5-dev-img2video.dgl) · [2.5 spatial latent upscale](ltx2/ltx-2-5-spatial-upscale.dgl) |

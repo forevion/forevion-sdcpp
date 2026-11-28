@@ -1,0 +1,42 @@
+# version: 0.0.0
+
+var {
+{{variables}}
+}
+
+fn vsr_refine_tile(tile, latent, plan, model, upscaler, rng, steps) {
+    tile_w = math::floor(plan.tile_width / 16)
+    tile_h = math::floor(plan.tile_height / 16)
+    low = tensor::crop(latent, axes = [0, 1], start = [math::floor(tile.x / 16), math::floor(tile.y / 16)], size = [tile_w, tile_h])
+    upscaled = upscale_latent(upscaler, low, width = tile_w * plan.factor, height = tile_h * plan.factor)
+    # Variance-preserving mix with the release's noise scale 0.7: sqrt(1 - 0.7^2) * low + 0.7 * noise
+    start = tensor::add(tensor::affine(upscaled, scale = 0.714142842854285), tensor::affine(tensor::randn_like(upscaled, rng = rng), scale = 0.7))
+    pred = predictor(model, {})
+    sigmas = make_sigmas(pred, latent = start, steps = steps, scheduler = "piflow")
+    return sample(start, sigmas, predict = pred, method = "euler", rng = rng)
+}
+
+fn decode_tile(latent, vae) {
+    return vae_decode(vae, dit_to_vae_latents(vae, latent), dtype = "f32")
+}
+
+fn main({{inputs}}) {
+    model = load_dit(model_path{{model_options}})
+    vae = load_vae(vae_path{{vae_options}})
+    upscaler = load_latent_upscaler(latent_upscaler_path{{upscaler_options}})
+    rng = make_rng(rng_type, seed = seed)
+    shape = tensor::shape(control_video)
+    # The causal K-VAE needs 4n+1 frames; extra trailing frames are dropped.
+    count = math::floor((math::min(shape[3], frames) - 1) / 4) * 4 + 1
+    clip = tensor::crop(control_video, axes = [3], start = [0], size = [count])
+    plan = kandinsky6_vsr::plan(width = shape[1], height = shape[2], scale = vsr_scale, min_overlap = 0.2)
+    planar = tensor::div(tensor::permute(tensor::cast(clip, "f32"), axes = [1, 2, 3, 0]), 255.0)
+    resized = tensor::clamp(tensor::interpolate(planar, [plan.width, plan.height], mode = "bilinear"), min = 0, max = 1)
+    pixels = tensor::reshape(resized, [plan.width, plan.height, count, 3, 1])
+    latent = vae_to_dit_latents(vae, vae_encode(vae, pixels, rng = rng, posterior = "mode"))
+    tiles = map(plan.tiles, process = vsr_refine_tile, latent = latent, plan = plan, model = model, upscaler = upscaler, rng = rng, steps = steps)
+    # Decode after every tile is refined, so the transformer and upscaler can be released first.
+    decoded = map(tiles, process = decode_tile, vae = vae)
+    output_frames = kandinsky6_vsr::blend(decoded, plan)
+    return {video = {frames = output_frames, fps_num = fps, fps_den = 1}, latent = latent, audio = {}}
+}

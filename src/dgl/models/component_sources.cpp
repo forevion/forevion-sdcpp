@@ -163,6 +163,18 @@ namespace sd::dgl::models {
                 const auto looks_like_h3 = [&](const std::string& p) {
                     return weights.count(p + "conv_in.weight") && weights.count(p + "embed.2.weight");
                 };
+                const auto looks_like_k6 = [&](const std::string& p) {
+                    return weights.count(p + "_models.0.output_proj.conv.weight") || weights.count(p + "_models.0.x2_branch.output_proj.conv.weight");
+                };
+                if (looks_like_k6("k6_latent_upscaler.") || looks_like_k6("")) {
+                    if (family != VERSION_COUNT && !sd_version_is_kandinsky6_vsr(family))
+                        throw std::runtime_error("latent upscaler weights do not match the requested family");
+                    if (family == VERSION_COUNT)
+                        family = VERSION_KANDINSKY6_VSR;
+                    if (!looks_like_k6("k6_latent_upscaler."))
+                        prefix = "k6_latent_upscaler.";
+                    break;
+                }
                 const bool ltx_prefixed = looks_like_ltx("ltx_latent_upsampler.");
                 const bool h3_prefixed  = looks_like_h3("h3_latent_upscaler.");
                 const bool ltx          = ltx_prefixed || looks_like_ltx("");

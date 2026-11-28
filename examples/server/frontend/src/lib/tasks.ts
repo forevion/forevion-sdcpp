@@ -2,7 +2,7 @@ import type { Recipe } from "./types";
 
 // What the user wants to make. Each task needs certain inputs and is offered only when the
 // chosen model declares the matching recipe feature.
-export type TaskId = "t2i" | "i2i" | "edit" | "t2v" | "i2v" | "s2v" | "r2v" | "v2v" | "t2a";
+export type TaskId = "t2i" | "i2i" | "edit" | "t2v" | "i2v" | "s2v" | "r2v" | "v2v" | "upscale" | "t2a";
 
 export interface TaskDef {
     id: TaskId;
@@ -17,6 +17,7 @@ export const TASKS: TaskDef[] = [
     { id: "s2v", label: "Speech → video", hint: "Lip sync: a portrait talks along to an audio clip.", output: "video" },
     { id: "r2v", label: "Character → video", hint: "Keep a person, character or object from reference pictures (and a voice from audio).", output: "video" },
     { id: "v2v", label: "Video → video", hint: "Follow the motion of a control video.", output: "video" },
+    { id: "upscale", label: "Upscale video", hint: "Make a clip larger and sharper (2×, 2.25× or 4×). No prompt needed.", output: "video" },
     { id: "t2i", label: "Text → image", hint: "Describe a picture.", output: "image" },
     { id: "i2i", label: "Image → image", hint: "Redraw a picture; strength sets how much changes.", output: "image" },
     { id: "edit", label: "Edit image", hint: "Change pictures with an instruction, using them as references.", output: "image" },
@@ -38,6 +39,8 @@ export function availableTasks(recipe: Recipe | undefined): TaskDef[] {
     const f = recipe.effective_features || {};
     const video = isVideoRecipe(recipe);
     const ids: TaskId[] = [];
+    // Video upscalers only refine an existing clip.
+    if (f.video_upscale) return TASKS.filter((t) => t.id === "upscale");
     if (video) {
         ids.push("t2v");
         if (f.init_image && !f.vace) ids.push("i2v");
@@ -70,6 +73,7 @@ export function capabilityBadges(recipe: Recipe | undefined, extra?: { features?
     if (features.has("init_image") && video) badges.push("Image→video");
     if (features.has("end_image")) badges.push("Start/end frames");
     if (features.has("ref_audios")) badges.push("Lip sync");
+    if (features.has("video_upscale")) return ["Video", "Upscale"];
     if (features.has("control_frames")) badges.push("Video→video");
     if (features.has("ref_images")) badges.push(video ? "References" : "Editing");
     if (!video && !features.has("ref_images") && recipe && recipe.effective_features?.img2img !== false) badges.push("Image→image");

@@ -1474,6 +1474,178 @@
       }
     },
     {
+      "id": "kandinsky6-vsr-2.0",
+      "name": "Kandinsky 6.0 VSR 2.0",
+      "group": "Kandinsky 6",
+      "description": "Video upscaling, 2 distilled steps, no prompt. The 1.4B transformer stays bf16; the K-VAE is packed to f16 (3.5 GB); the latent upscaler bank (2x and 4x) is shared with VSR 5s.",
+      "license": "MIT",
+      "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-2.0-distilled2steps-Diffusers",
+      "media": [
+        "video"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/kandinsky6-vsr-2.0-bf16.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-2.0-distilled2steps-Diffusers/resolve/main/transformer/diffusion_pytorch_model.safetensors",
+          "sha256": "e7213abb92ce6bfb9546dd6294465eece61eabaaa8df48883ceb3631662b739c",
+          "size": 3187645192
+        },
+        {
+          "path": "latent_upscale_models/kandinsky6-vsr-latent-upscaler-bf16.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-2.0-distilled2steps-Diffusers/resolve/main/latent_upscaler/diffusion_pytorch_model.safetensors",
+          "sha256": "ee43faf02cda418cf368a9c391e27f90045b440d16088ad0c3d1a04b763dcd91",
+          "size": 7308101968
+        }
+      ],
+      "convert": [
+        {
+          "id": "kvae",
+          "output": "vae/kandinsky6-vsr-kvae-{type}.gguf",
+          "types": [
+            {
+              "type": "f16"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "diffusion_pytorch_model.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-2.0-distilled2steps-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
+              "sha256": "079413ec24542e5c20bd98e6a49a82c0a1f3e64add1c2fc12eff3fdfe6498bf8",
+              "size": 6955556660
+            }
+          ]
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Upscales an existing clip 2x, 2.25x or 4x in 2 distilled steps. There is no prompt; pick the Upscale video task on Create, or press Upscale on a video in the Gallery.",
+          "The clip is cut into tiles of 512x512, 512x768 or 768x512 output pixels; at 2x the input must be at least 256 pixels on its short side.",
+          "Frame counts are 4n+1; extra frames are dropped. On CPU expect about a minute per output tile for a short clip."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/kandinsky6-vsr-2.0-bf16.safetensors",
+          "vae": "{kvae}",
+          "latent_upscaler": "latent_upscale_models/kandinsky6-vsr-latent-upscaler-bf16.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "floor",
+            "min_frames": 5
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "scheduler": "piflow",
+            "video_frames": 17,
+            "fps": 24,
+            "cfg_scale": 1,
+            "steps": 2,
+            "width": 1024,
+            "height": 576
+          },
+          "features": [
+            "control_frames",
+            "video_upscale"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-2.0-distilled2steps-Diffusers"
+        }
+      }
+    },
+    {
+      "id": "kandinsky6-vsr-5s",
+      "name": "Kandinsky 6.0 VSR 5s",
+      "group": "Kandinsky 6",
+      "description": "The earlier VSR release, trained on 5-second clips. Same K-VAE and latent upscaler as VSR 2.0; only the transformer differs.",
+      "license": "MIT",
+      "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers",
+      "media": [
+        "video"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/kandinsky6-vsr-5s-bf16.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/main/transformer/diffusion_pytorch_model.safetensors",
+          "sha256": "02462583bbc99ae8be8a4bb2aab1b62babfdda1302806f938fca94ed3fabf1fe",
+          "size": 3187645192
+        },
+        {
+          "path": "latent_upscale_models/kandinsky6-vsr-latent-upscaler-bf16.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/main/latent_upscaler/diffusion_pytorch_model.safetensors",
+          "sha256": "ee43faf02cda418cf368a9c391e27f90045b440d16088ad0c3d1a04b763dcd91",
+          "size": 7308101968
+        }
+      ],
+      "convert": [
+        {
+          "id": "kvae",
+          "output": "vae/kandinsky6-vsr-kvae-{type}.gguf",
+          "types": [
+            {
+              "type": "f16"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "diffusion_pytorch_model.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
+              "sha256": "079413ec24542e5c20bd98e6a49a82c0a1f3e64add1c2fc12eff3fdfe6498bf8",
+              "size": 6955556660
+            }
+          ]
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Upscales an existing clip 2x, 2.25x or 4x in 2 distilled steps. There is no prompt; pick the Upscale video task on Create, or press Upscale on a video in the Gallery.",
+          "The clip is cut into tiles of 512x512, 512x768 or 768x512 output pixels; at 2x the input must be at least 256 pixels on its short side.",
+          "Frame counts are 4n+1; extra frames are dropped. On CPU expect about a minute per output tile for a short clip.",
+          "This is the 5s checkpoint; its variant=5s setting selects the matching flow shift (3.5)."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/kandinsky6-vsr-5s-bf16.safetensors",
+          "vae": "{kvae}",
+          "latent_upscaler": "latent_upscale_models/kandinsky6-vsr-latent-upscaler-bf16.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "floor",
+            "min_frames": 5
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "scheduler": "piflow",
+            "video_frames": 17,
+            "fps": 24,
+            "cfg_scale": 1,
+            "steps": 2,
+            "width": 1024,
+            "height": 576
+          },
+          "features": [
+            "control_frames",
+            "video_upscale"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-distilled2steps-5s-Diffusers",
+          "context": {
+            "model_args": "variant=5s"
+          }
+        }
+      }
+    },
+    {
       "id": "lora-wan22-a14b-lightx2v-4-step-t2v",
       "name": "LightX2V 4-step (T2V) LoRA",
       "group": "LoRAs: Wan 2.2 A14B",

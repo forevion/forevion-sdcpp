@@ -16,6 +16,7 @@ during configuration.
 | [image_sefi.dgl](image_sefi.dgl) | SeFi dual schedules |
 | [video_wan.dgl](video_wan.dgl) | Wan/Hunyuan video, VACE, S2V and dual experts |
 | [video_ltx.dgl](video_ltx.dgl) | LTX video/audio generation and keyframes |
+| [video_vsr.dgl](video_vsr.dgl) | Kandinsky 6 VSR: upscale `control_frames` tile by tile |
 | `video_h3.dgl` | MiniMax-H3 video/audio generation and references |
 | [upscale.dgl](upscale.dgl) | Standalone image upscaling, including repeats |
 

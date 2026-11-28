@@ -45,6 +45,7 @@ import {
     stageLabels,
     state,
     submit,
+    UPSCALE_MAX_SIDE,
 } from "../lib/store";
 import type { Aspect, LoraStage } from "../lib/store";
 import { availableTasks, TASK_NOT_IN_SDCPP, TASKS } from "../lib/tasks";
@@ -91,8 +92,15 @@ const startImages = computed(() => (state.inputs.startImage ? [{ name: state.inp
 const endImages = computed(() => (state.inputs.endImage ? [{ name: state.inputs.endName, data: state.inputs.endImage }] : []));
 const hasInputs = computed(() => {
     const s = inputSupport.value;
-    return s.startFrame || s.endFrame || s.refImages || s.audio || s.control || s.strength;
+    return s.startFrame || s.endFrame || s.refImages || s.audio || s.control || s.upscale || s.strength;
 });
+const upscaling = computed(() => currentTask.value?.id === "upscale");
+const upscaleFactors = [2, 2.25, 4];
+const upscaleFrameLimit = computed(() => currentRecipe.value?.video_constraints?.max_frames ?? 121);
+
+function setUpscale(video: { name: string; frames: string[]; width?: number; height?: number } | null) {
+    state.inputs.upscale = video && video.width && video.height ? { name: video.name, frames: video.frames, width: video.width, height: video.height } : null;
+}
 
 function setEnd(image: { name: string; data: string }) {
     state.inputs.endImage = image.data;
@@ -237,7 +245,7 @@ watch(
 );
 
 async function generate() {
-    if (!form.prompt.trim() || submitting.value) return;
+    if ((!form.prompt.trim() && !upscaling.value) || submitting.value) return;
     submitting.value = true;
     try {
         await submit();
@@ -376,7 +384,7 @@ function resetAdvanced() {
                     </div>
                 </details>
 
-                <label class="field">
+                <label v-if="!upscaling" class="field">
                     <span>Prompt</span>
                     <textarea
                         v-model="form.prompt"
@@ -414,6 +422,18 @@ function resetAdvanced() {
                             <VideoFramesInput :video="state.inputs.control" :frames="plan.renderFrames" :fps="plan.fps" :width="plan.width" :height="plan.height" @set="state.inputs.control = $event" />
                             <small class="faint">Frames are taken at {{ plan.fps }} fps for {{ plan.renderFrames }} frames; set Length and Shape first.</small>
                         </div>
+                        <div v-if="inputSupport.upscale" class="field">
+                            <span>Video to upscale <em class="req">required</em></span>
+                            <VideoFramesInput :video="state.inputs.upscale" :frames="upscaleFrameLimit" :fps="plan.fps" :width="0" :height="0" native :max-side="UPSCALE_MAX_SIDE" @set="setUpscale" />
+                            <small class="faint">Reads up to {{ upscaleFrameLimit }} frames at {{ plan.fps }} fps (set FPS under More settings). Clips must be at least 256 pixels on each side; sides above {{ UPSCALE_MAX_SIDE }} are scaled down first.</small>
+                        </div>
+                        <div v-if="inputSupport.upscale" class="field">
+                            <span>Upscale <b v-if="state.inputs.upscale" class="value">{{ state.inputs.upscale.width }}×{{ state.inputs.upscale.height }} → {{ plan.width }}×{{ plan.height }} · {{ plan.frames }} frames</b></span>
+                            <div class="segmented" role="group" aria-label="Upscale factor">
+                                <button v-for="f in upscaleFactors" :key="f" type="button" :aria-pressed="form.upscale === f" @click="form.upscale = f">{{ f }}×</button>
+                            </div>
+                            <small class="faint">4× needs a clip of at least 128 pixels; it is the slowest.</small>
+                        </div>
                         <div v-if="inputSupport.strength" class="field">
                             <span>Strength <b class="value">{{ form.strength.toFixed(2) }}</b></span>
                             <input v-model.number="form.strength" class="range" type="range" min="0.05" max="1" step="0.05" />
@@ -422,7 +442,7 @@ function resetAdvanced() {
                     </div>
                 </section>
 
-                <div class="row2">
+                <div v-if="!upscaling" class="row2">
                     <div class="field">
                         <span>Shape</span>
                         <div class="segmented" role="group" aria-label="Aspect ratio">
@@ -438,7 +458,7 @@ function resetAdvanced() {
                     </div>
                 </div>
 
-                <div v-if="plan.video" class="field">
+                <div v-if="plan.video && !upscaling" class="field">
                     <span>Length <b class="value">{{ plan.seconds.toFixed(1) }} s · {{ plan.frames }} frames</b></span>
                     <input v-model.number="form.seconds" class="range" type="range" min="0.5" :max="maxSeconds" step="0.5" />
                 </div>
@@ -524,7 +544,7 @@ function resetAdvanced() {
                     <p v-if="missingInputs.length" class="status-message status-message--error">Add {{ missingInputs.join(" and ") }} (Inputs above).</p>
                     <p v-if="state.error" class="status-message status-message--error">{{ state.error }}</p>
                     <div class="go-row">
-                        <button class="btn btn-lg" type="button" :disabled="!form.prompt.trim() || submitting || missingFiles.length > 0 || missingInputs.length > 0" @click="generate">
+                        <button class="btn btn-lg" type="button" :disabled="(!form.prompt.trim() && !upscaling) || submitting || missingFiles.length > 0 || missingInputs.length > 0" @click="generate">
                             <span v-if="submitting" class="spin" aria-hidden="true" />
                             <Icon v-else name="sparkles" />
                             {{ submitting ? "Sending…" : activeJobs.length ? `Add to queue (${activeJobs.length} ahead)` : "Generate" }}

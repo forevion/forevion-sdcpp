@@ -448,6 +448,10 @@ SDVersion ModelLoader::get_sd_version() const {
         if (tensor_storage_map.count(prefix + "model.x_embedder.proj1.weight") &&
             tensor_storage_map.count(prefix + "model.language_model.layers.0.self_attn.q_proj.weight"))
             return VERSION_HIDREAM_O1;
+        if (tensor_storage_map.count(prefix + "pooled_bias") &&
+            tensor_storage_map.count(prefix + "visual_transformer_blocks.0.visual_modulation.out_layer.weight") &&
+            !tensor_storage_map.count(prefix + "video_text_embeddings.in_layer.weight"))
+            return VERSION_KANDINSKY6_VSR;
         if (tensor_storage_map.count(prefix + "visual_transformer_blocks.0.va_cross_attention.to_query.weight") &&
             tensor_storage_map.count(prefix + "video_text_embeddings.in_layer.weight")) {
             // Distilled checkpoints predict n_grid PiFlow velocities per audio channel, the others one.
@@ -463,6 +467,9 @@ SDVersion ModelLoader::get_sd_version() const {
         if (tensor_storage_map.count(prefix + "condition_encoder.projection.weight") &&
             tensor_storage_map.count(prefix + "residual_projection.weight"))
             return VERSION_RELAY_VSR;
+        if (tensor_storage_map.count(prefix + "decoder.up.2.upsample.temporal_conv.conv.weight") &&
+            tensor_storage_map.count(prefix + "decoder.mid.block_1.norm1.conv_y.weight"))
+            return VERSION_KANDINSKY6_VSR;
         if (prefix != "flash." && tensor_storage_map.count(prefix + "encoder.conv_out.bias") &&
             tensor_storage_map.count(prefix + "decoder.up_blocks.0.upsamplers.0.upscale_conv.weight"))
             return VERSION_SEEDVR2;

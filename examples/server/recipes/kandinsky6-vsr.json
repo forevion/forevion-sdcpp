@@ -1,0 +1,48 @@
+{
+  "schema_version": 1,
+  "id": "kandinsky6-vsr",
+  "name": "Kandinsky 6.0 VSR",
+  "size_multiple": 16,
+  "description": "Video upscaling (2x, 2.25x or 4x) in 2 distilled PiFlow steps, without a prompt. Needs the K-VAE and the latent upscaler bank from the same release. For the 5s checkpoint, set the context model_args to variant=5s.",
+  "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-VSR-2.0-distilled2steps-Diffusers",
+  "slots": [
+    {
+      "id": "diffusion_model",
+      "required": true
+    },
+    {
+      "id": "vae",
+      "required": true,
+      "label": "K-VAE"
+    },
+    {
+      "id": "latent_upscaler",
+      "required": true,
+      "label": "Latent upscaler bank"
+    }
+  ],
+  "video_constraints": {
+    "frame_step": 4,
+    "frame_offset": 1,
+    "frame_rounding": "floor",
+    "min_frames": 5
+  },
+  "defaults": {
+    "sampling_method": "euler",
+    "scheduler": "piflow",
+    "video_frames": 17,
+    "fps": 24,
+    "cfg_scale": 1,
+    "steps": 2,
+    "width": 1024,
+    "height": 576
+  },
+  "features": [
+    "control_frames",
+    "video_upscale"
+  ],
+  "disabled_features": [
+    "img2img",
+    "mask_image"
+  ]
+}

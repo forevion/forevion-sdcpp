@@ -294,6 +294,7 @@ static void add_context_specs(std::vector<ParamSpec>& specs) {
     ctx.boolean("auto_fit", &sd::ContextConfig::auto_fit);
     ctx.boolean("batched_cfg", &sd::ContextConfig::batched_cfg);
     ctx.string("clip_g_path", &sd::ContextConfig::clip_g_path);
+    ctx.string("latent_upscaler_path", &sd::ContextConfig::latent_upscaler_path);
     ctx.string("clip_l_path", &sd::ContextConfig::clip_l_path);
     ctx.string("clip_vision_path", &sd::ContextConfig::clip_vision_path);
     ctx.integer("conditioning_cache_size", &sd::ContextConfig::conditioning_cache_size, 0, INT32_MAX);

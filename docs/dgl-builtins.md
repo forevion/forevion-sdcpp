@@ -38,6 +38,8 @@ Optional parameters are marked with `?`. Default values follow `=`. See [DGL syn
 | `ip_adapter::apply` | `condition: dict`, `adapter: ip_adapter`, `tokens: tensor`, `strength?: number = 1`, `start_sigma?: number`, `end_sigma?: number` | same type as `condition`<br>`ip_adapters: ip_adapter_bindings` |
 | `ip_adapter::load` (resource) | `path: string`, `family?: string = "auto"`, `wtype?: string = "auto"`, `conv_scale?: number = 0`, `linear_scale?: number = 0`, `attn_scale?: number = 0`, `backend?: string = ""`, `params_backend?: string = ""`, `split_mode?: string = ""`, `model_args?: string = ""`, `tensor_type_rules?: string = ""`, `flash_attn_mode?: string = "auto"`, `conv_direct_mode?: string = "auto"`, `sage_attn?: bool = false` | `ip_adapter` |
 | `ip_adapter::project` | `adapter: ip_adapter`, `embedding: tensor` | `tensor` |
+| `kandinsky6_vsr::blend` | `tiles: list<tensor>`, `plan: dict` | `tensor` |
+| `kandinsky6_vsr::plan` | `width: int`, `height: int`, `scale?: number = 2.25`, `min_overlap?: number = 0.2` | `dict`<br>`factor: int`<br>`height: int`<br>`tile_height: int`<br>`tile_width: int`<br>`tiles: list<dict>`<br>`tiles.x: int`<br>`tiles.y: int`<br>`width: int` |
 | `latent_shape` | `vae: vae`, `width: int`, `height: int`, `batch?: int = 1`, `frames?: int` | `tensor` |
 | `list::replace` | `items: list<any>`, `index: int`, `value: any` | `list<any>` |
 | `load_audio_encoder` (resource) | `path: string`, `family?: string = "auto"`, `wtype?: string = "auto"`, `conv_scale?: number = 0`, `linear_scale?: number = 0`, `attn_scale?: number = 0`, `backend?: string = ""`, `params_backend?: string = ""`, `split_mode?: string = ""`, `model_args?: string = ""`, `tensor_type_rules?: string = ""`, `flash_attn_mode?: string = "auto"`, `conv_direct_mode?: string = "auto"`, `sage_attn?: bool = false` | `audio_encoder` |
@@ -215,3 +217,5 @@ Pass the ID as the component loader's `family` argument. The default is `"auto"`
 | `seedvr2` | SeedVR2 |
 | `kandinsky6` | Kandinsky 6 |
 | `kandinsky6_flow` | Kandinsky 6 (non-distilled) |
+| `kandinsky6_vsr` | Kandinsky 6 VSR |
+| `kandinsky6_vsr_5s` | Kandinsky 6 VSR (5s) |

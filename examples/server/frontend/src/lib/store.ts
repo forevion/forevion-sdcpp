@@ -1,6 +1,7 @@
 import { computed, reactive, watch } from "vue";
 
 import { api } from "./api";
+import { readVideoFrames } from "./frames";
 import { availableTasks, producesAudio } from "./tasks";
 import type { TaskId } from "./tasks";
 import type { DownloadCatalog, Job, JobSummaryEntry, LoraEntry, LoraFile, ModelFile, OutputEntry, Recipe, SystemInfo } from "./types";
@@ -31,6 +32,8 @@ export interface CreateForm {
     steps: number | null;
     cfg: number | null;
     fps: number | null;
+    // Upscale video: total spatial factor (2, 2.25 or 4).
+    upscale: number;
     submittedPrompt: string;
     // Per-model file choices that replace a preset's defaults; "" means "no file" for a slot.
     files: Record<string, Record<string, string>>;
@@ -56,6 +59,7 @@ function loadForm(): CreateForm {
         steps: null,
         cfg: null,
         fps: null,
+        upscale: 2,
         submittedPrompt: "",
         files: {},
         loras: {},
@@ -94,6 +98,8 @@ export const state = reactive({
         refImages: [] as { name: string; data: string }[],
         audio: null as { name: string; data: string; seconds: number } | null,
         control: null as { name: string; frames: string[] } | null,
+        // Upscale video: frames at the clip's own size.
+        upscale: null as { name: string; frames: string[]; width: number; height: number } | null,
     },
 });
 
@@ -322,9 +328,25 @@ export function alignFrames(frames: number, recipe: Recipe | undefined): number 
     return Math.min(last, Math.max(first, rounded * step + offset));
 }
 
+// Output size of Kandinsky6SRPipeline: 2.25x is a 1.125x pre-upscale (rounded to 16, halves to even) then 2x.
+export function upscaledSize(width: number, height: number, scale: number) {
+    const snap = (v: number) => Math.floor(v / 16) * 16;
+    const even = (v: number) => (Math.abs(v - Math.trunc(v)) === 0.5 ? 2 * Math.round(v / 2) : Math.round(v));
+    if (scale === 2.25) return { width: 2 * even((snap(width) * 1.125) / 16) * 16, height: 2 * even((snap(height) * 1.125) / 16) * 16 };
+    return { width: snap(width) * scale, height: snap(height) * scale };
+}
+
 export const plan = computed(() => {
     const recipe = currentRecipe.value;
     const form = state.form;
+    const source = currentTask.value?.id === "upscale" ? state.inputs.upscale : null;
+    if (source) {
+        const { width, height } = upscaledSize(source.width, source.height, form.upscale);
+        const fps = form.fps ?? recipe?.defaults?.fps ?? 24;
+        const frames = alignFrames(source.frames.length, recipe);
+        const steps = form.steps ?? recipe?.defaults?.steps ?? 2;
+        return { recipe, width, height, fps, frames, renderFrames: frames, still: null, steps, video: true, seconds: frames / fps };
+    }
     const { width, height } = frameSize(recipe, form.aspect, form.size);
     const fps = recipe?.video_constraints?.fixed_fps ?? form.fps ?? recipe?.defaults?.fps ?? 24;
     const video = currentTask.value?.output === "video" && recipeIsVideo(recipe);
@@ -356,6 +378,7 @@ export const inputSupport = computed(() => {
         refImages: (task === "edit" || task === "r2v") && Boolean(features.ref_images),
         audio: task === "s2v" || (task === "r2v" && Boolean(features.ref_audios)),
         control: task === "v2v",
+        upscale: task === "upscale",
         strength: task === "i2i",
         sound: producesAudio(currentRecipe.value, selectedFiles.value),
     };
@@ -371,16 +394,18 @@ export const missingInputs = computed<string[]>(() => {
     if (currentTask.value?.id === "r2v" && !support.vaceReference && !inputs.refImages.length && !inputs.audio) missing.push("a reference image or audio clip");
     if (currentTask.value?.id === "s2v" && !inputs.audio) missing.push("a speech audio clip");
     if (support.control && !inputs.control) missing.push("a control video");
+    if (support.upscale && !inputs.upscale) missing.push("a video to upscale");
     return missing;
 });
 
 export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<string, unknown> } | null {
     const p = plan.value;
     const form = state.form;
-    if (!p.recipe || !form.prompt.trim() || missingFiles.value.length || missingInputs.value.length) return null;
+    const upscaling = currentTask.value?.id === "upscale";
+    if (!p.recipe || (!upscaling && !form.prompt.trim()) || missingFiles.value.length || missingInputs.value.length) return null;
     const usesVideoEndpoint = recipeIsVideo(p.recipe);
     const body: Record<string, unknown> = {
-        prompt: form.prompt.trim(),
+        prompt: upscaling ? form.prompt.trim() || "Upscaled video" : form.prompt.trim(),
         negative_prompt: form.negativePrompt,
         width: p.width,
         height: p.height,
@@ -401,6 +426,7 @@ export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<stri
     if (support.refImages && inputs.refImages.length) body.ref_images = inputs.refImages.map((image) => image.data);
     if (support.audio && inputs.audio) body.ref_audios = [inputs.audio.data];
     if (support.control && inputs.control) body.control_frames = inputs.control.frames;
+    if (support.upscale && inputs.upscale) body.control_frames = inputs.upscale.frames;
     if (support.strength) body.strength = form.strength;
     if (usesVideoEndpoint) {
         body.video_frames = p.renderFrames;
@@ -640,6 +666,7 @@ export function newCreation() {
     state.inputs.refImages = [];
     state.inputs.audio = null;
     state.inputs.control = null;
+    state.inputs.upscale = null;
     form.prompt = "";
     form.negativePrompt = "";
     form.submittedPrompt = "";
@@ -653,9 +680,13 @@ export function newCreation() {
 }
 
 // Entering Create clears it only when its prompt was already generated, so unsent drafts survive.
+// Set when another page hands Create its inputs (Gallery → Upscale), so entering keeps them.
+let handoff = false;
+
 export function enterCreate() {
     const form = state.form;
-    if (!form.prompt.trim() || form.prompt === form.submittedPrompt) newCreation();
+    if (handoff) handoff = false;
+    else if (!form.prompt.trim() || form.prompt === form.submittedPrompt) newCreation();
     else {
         state.lastCompleted = null;
         state.createSelected = null;
@@ -716,8 +747,10 @@ async function restoreInputs(output: OutputEntry, video: boolean) {
     inputs.refImages = [];
     inputs.audio = null;
     inputs.control = null;
+    inputs.upscale = null;
     const form = state.form;
-    if (saved.control_frames?.length) form.task = "v2v";
+    const upscaler = Boolean(currentRecipe.value?.effective_features?.video_upscale);
+    if (saved.control_frames?.length) form.task = upscaler ? "upscale" : "v2v";
     else if (saved.ref_audios?.length && saved.init_image) form.task = "s2v";
     else if (saved.ref_images?.length || saved.ref_audios?.length) form.task = video ? "r2v" : "edit";
     else if (saved.init_image) form.task = video ? "i2v" : "i2i";
@@ -734,9 +767,41 @@ async function restoreInputs(output: OutputEntry, video: boolean) {
         if (saved.control_frames?.length) {
             const frames: string[] = [];
             for (const url of saved.control_frames) frames.push((await urlToDataUrl(url)).data);
-            inputs.control = { name: `${frames.length} saved frames`, frames };
+            if (upscaler) inputs.upscale = { name: `${frames.length} saved frames`, frames, ...(await imageSize(frames[0])) };
+            else inputs.control = { name: `${frames.length} saved frames`, frames };
         }
     } catch (error) {
         state.error = `Some inputs of this result could not be loaded: ${(error as Error).message}`;
     }
+}
+
+function imageSize(url: string): Promise<{ width: number; height: number }> {
+    return new Promise((resolve, reject) => {
+        const image = new Image();
+        image.onload = () => resolve({ width: image.naturalWidth, height: image.naturalHeight });
+        image.onerror = () => reject(new Error("unreadable frame"));
+        image.src = url;
+    });
+}
+
+// Upscalers take clips up to this side; larger inputs are read smaller.
+export const UPSCALE_MAX_SIDE = 1024;
+
+// Sends a Gallery video to Create's Upscale task with the first model that can upscale.
+export async function upscaleOutput(output: OutputEntry): Promise<string> {
+    const can = (r: Recipe) => Boolean(r.effective_features?.video_upscale);
+    const recipe = readyRecipes.value.find(can) || state.recipes.find(can);
+    if (!recipe) return "No video upscaler is set up yet. Add Kandinsky 6.0 VSR on the Models page.";
+    const form = state.form;
+    form.recipeId = recipe.id;
+    form.task = "upscale";
+    form.fps = output.fps || null;
+    state.inputs.upscale = null;
+    const fps = output.fps || recipe.defaults?.fps || 24;
+    const clip = await readVideoFrames(output.url, { fps, frames: output.frame_count || output.video_frames || 4096, native: true, maxSide: UPSCALE_MAX_SIDE });
+    newCreation();
+    form.fps = output.fps || null;
+    state.inputs.upscale = { name: output.file, frames: clip.frames, width: clip.width, height: clip.height };
+    handoff = true;
+    return "";
 }
