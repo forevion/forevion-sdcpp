@@ -35,7 +35,15 @@ const std::vector<ModelDefinition>& kandinsky6_definitions() {
         definition.sampling.default_sample_method   = EULER_SAMPLE_METHOD;
         definition.sampling.default_scheduler       = PIFLOW_SCHEDULER;
         definition.build                            = build_kandinsky6;
-        return std::vector<ModelDefinition>{std::move(definition)};
+
+        // Non-distilled checkpoints (Lite, Pro) predict one flow velocity per channel and use
+        // classifier-free guidance with FlowMatchEuler sampling.
+        ModelDefinition flow                = definition;
+        flow.version                        = VERSION_KANDINSKY6_FLOW;
+        flow.name                           = "Kandinsky 6 (non-distilled)";
+        flow.id                             = "kandinsky6_flow";
+        flow.sampling.default_scheduler     = DISCRETE_SCHEDULER;
+        return std::vector<ModelDefinition>{std::move(definition), std::move(flow)};
     }();
     return definitions;
 }

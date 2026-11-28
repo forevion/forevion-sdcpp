@@ -214,3 +214,4 @@ Pass the ID as the component loader's `family` argument. The default is `"auto"`
 | `relayvsr` | RelayVSR |
 | `seedvr2` | SeedVR2 |
 | `kandinsky6` | Kandinsky 6 |
+| `kandinsky6_flow` | Kandinsky 6 (non-distilled) |
