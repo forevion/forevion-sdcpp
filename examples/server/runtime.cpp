@@ -307,7 +307,7 @@ ArgOptions SDSvrParams::get_options() {
         {"", "--dgl-dir", "Web UI script directory (default: dgl)", 0, &dgl_dir},
         {"", "--output-dir", "directory for finished images and videos shown in the Web UI history; \"none\" disables saving (default: outputs)", 0, &output_dir},
         {"", "--input-dir", "directory where uploaded start images, references, audio and control frames are kept; \"none\" disables it (default: none)", 0, &input_dir},
-        {"", "--settings-file", "JSON file with the models, inputs and outputs folders chosen in the Web UI; the Web UI asks for them until they are set (optional)", 0, &settings_file},
+        {"", "--settings-file", "JSON file with the models, inputs and outputs folders chosen in the Web UI; the Web UI asks for them until they are set (default without --model-dir: studio-settings.json next to sd-server; \"none\" turns it off)", 0, &settings_file},
         {"", "--catalog-url", "online model download catalog for the Models page; \"none\" uses only the built-in and local lists (default: the forevion-sdcpp master catalog)", 0, &catalog_url},
     };
 

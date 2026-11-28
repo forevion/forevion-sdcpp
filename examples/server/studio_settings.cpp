@@ -118,10 +118,34 @@ json folder_roots() {
     return roots;
 }
 
+// The folder of the running sd-server executable.
+fs::path executable_folder() {
+    std::error_code error;
+#ifdef _WIN32
+    wchar_t buffer[MAX_PATH];
+    const DWORD length = GetModuleFileNameW(nullptr, buffer, MAX_PATH);
+    if (length > 0 && length < MAX_PATH)
+        return fs::path(buffer).parent_path();
+#else
+    const fs::path self = fs::read_symlink("/proc/self/exe", error);
+    if (!error)
+        return self.parent_path();
+#endif
+    return fs::current_path(error);
+}
+
 }  // namespace
 
 void apply_studio_settings(SDSvrParams& params) {
     params.folders_configured = false;
+    if (params.settings_file == "none") {
+        params.settings_file.clear();
+        return;
+    }
+    // Started with no folder options (for example by double-clicking sd-server), keep the
+    // folders next to the executable so the Web UI can ask for them and save them.
+    if (params.settings_file.empty() && params.model_dirs.empty())
+        params.settings_file = (executable_folder() / "studio-settings.json").u8string();
     if (params.settings_file.empty())
         return;
     const json settings = read_settings(params.settings_file);

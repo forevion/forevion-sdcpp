@@ -795,6 +795,9 @@ frames of each job, named by their content so a picture used twice is stored onc
 and `catalog_url`. When it names three existing folders they replace `--model-dir`,
 `--input-dir` and `--output-dir`; until then the Web UI asks for the folders first. The
 Web UI writes this file; the launchers pass `studio-settings.json` next to themselves.
+Without `--settings-file` and `--model-dir` (for example when `sd-server` is started by a
+double-click), the server uses `studio-settings.json` next to its executable, so the Web UI
+still asks for the folders and saves them. `--settings-file none` turns this off.
 
 ### Model downloads
 
