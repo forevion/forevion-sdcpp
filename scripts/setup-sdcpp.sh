@@ -6,6 +6,7 @@
 #   ./setup-sdcpp.sh                set up if needed, then start
 #   ./setup-sdcpp.sh --update       get the latest release (or source), then start
 #   ./setup-sdcpp.sh --from-source  build from source instead of downloading a release
+#   ./setup-sdcpp.sh --gpu cuda     use an NVIDIA GPU (default: when nvidia-smi finds one)
 #   ./setup-sdcpp.sh --help         all options
 #
 # By default it downloads the latest ready-built "studio-*" release from GitHub (x86-64,
@@ -18,6 +19,7 @@ set -euo pipefail
 REPO_URL="${SDCPP_REPO:-https://github.com/forevion/forevion-sdcpp.git}"
 BRANCH="${SDCPP_BRANCH:-develop}"
 PACKAGE_NAME="sdcpp-studio-linux-x64"
+GPU="${SDCPP_GPU:-auto}"
 NODE_MAJOR=24
 HOST=127.0.0.1
 PORT=1234
@@ -41,11 +43,15 @@ Usage: $(basename "$0") [options]
   --lan           listen on all network interfaces so other devices can connect
                   (default: this computer only)
   --threads N     CPU threads (default: number of physical cores)
+  --gpu MODE      auto, cuda or cpu (default auto: CUDA when nvidia-smi finds an
+                  NVIDIA GPU). CUDA uses the ready-built CUDA package, or builds with
+                  the CUDA toolkit (nvcc) when building from source
   --no-browser    do not open the browser
   -h, --help      show this help
 
 Environment: SDCPP_REPO (default $REPO_URL), SDCPP_BRANCH (default $BRANCH),
-SDCPP_PACKAGE (install this $PACKAGE_NAME.tar.gz file or URL instead of the latest release).
+SDCPP_GPU (same as --gpu), SDCPP_PACKAGE (install this package file or URL instead of the
+latest release).
 EOF
 }
 
@@ -58,6 +64,7 @@ while [[ $# -gt 0 ]]; do
         --port) PORT="${2:?--port needs a number}"; shift ;;
         --lan) HOST=0.0.0.0 ;;
         --threads) THREADS="${2:?--threads needs a number}"; shift ;;
+        --gpu) GPU="${2:?--gpu needs auto, cuda or cpu}"; shift ;;
         --no-browser) OPEN_BROWSER=0 ;;
         -h|--help) usage; exit 0 ;;
         *) echo "Unknown option: $1" >&2; usage >&2; exit 2 ;;
@@ -99,10 +106,32 @@ SETTINGS="$HOME_DIR/studio-settings.json"
 APP="$HOME_DIR/app"
 REPO_SLUG="$(sed -E 's#^https://github.com/##; s#\.git$##' <<<"$REPO_URL")"
 
+# ================================================================ GPU
+
+case "$GPU" in
+    auto)
+        if command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L 2>/dev/null | grep -q '^GPU '; then
+            GPU=cuda
+        else
+            GPU=cpu
+        fi
+        ;;
+    cuda|cpu) ;;
+    *) die "--gpu must be auto, cuda or cpu" ;;
+esac
+if [[ "$GPU" == cuda ]]; then
+    command -v nvidia-smi >/dev/null 2>&1 && nvidia-smi -L >/dev/null 2>&1 ||
+        die "--gpu cuda needs an NVIDIA GPU with its driver (nvidia-smi does not work); use --gpu cpu"
+    PACKAGE_NAME="sdcpp-studio-linux-x64-cuda"
+    BUILD="$BUILD-cuda"
+fi
+
 if [[ -x "$SCRIPT_DIR/sd-server" && $FROM_SOURCE -eq 0 ]]; then
     # Run from an unpacked release archive: use the binaries next to this script.
     APP="$SCRIPT_DIR"
     BUNDLED=1
+    # An unpacked archive runs what it contains, whatever --gpu says.
+    if [[ "$(cat "$SCRIPT_DIR/PACKAGE" 2>/dev/null)" == *-cuda ]]; then GPU=cuda; else GPU=cpu; fi
 else
     BUNDLED=0
 fi
@@ -152,7 +181,10 @@ install_release() {
         [[ $UPDATE -eq 0 ]] || warn "--update is not available inside an unpacked archive; download the new release instead"
         return 0
     fi
-    if [[ -x "$APP/sd-server" && $UPDATE -eq 0 && -z "${SDCPP_PACKAGE:-}" ]]; then
+    if [[ $BUNDLED -eq 0 && -x "$APP/sd-server" && "$(cat "$APP/PACKAGE" 2>/dev/null || echo sdcpp-studio-linux-x64)" != "$PACKAGE_NAME" ]]; then
+        warn "the installed package is not $PACKAGE_NAME; replacing it"
+        installed=""
+    elif [[ -x "$APP/sd-server" && $UPDATE -eq 0 && -z "${SDCPP_PACKAGE:-}" ]]; then
         ok "installed: $installed"
         return 0
     fi
@@ -179,6 +211,15 @@ install_release() {
             FROM_SOURCE=1
             return 0
         fi
+        if ! curl -fsIL -o /dev/null "https://github.com/$REPO_SLUG/releases/download/$tag/$PACKAGE_NAME.tar.gz"; then
+            rm -rf "$work"
+            if [[ "$GPU" == cuda ]] && { command -v nvcc >/dev/null 2>&1 || [[ -x /usr/local/cuda/bin/nvcc ]]; }; then
+                warn "release $tag has no $PACKAGE_NAME package; building with the CUDA toolkit instead"
+                FROM_SOURCE=1
+                return 0
+            fi
+            die "release $tag has no $PACKAGE_NAME package. Install the CUDA toolkit and use --from-source, or use --gpu cpu."
+        fi
         if [[ "$tag" == "$installed" && -x "$APP/sd-server" ]]; then
             rm -rf "$work"
             ok "already the latest release ($tag)"
@@ -197,6 +238,7 @@ install_release() {
     tar -xzf "$work/$PACKAGE_NAME.tar.gz" -C "$work/unpacked" --strip-components=1
     [[ -x "$work/unpacked/sd-server" ]] || die "the package does not contain sd-server"
     echo "$tag" >"$work/unpacked/RELEASE"
+    echo "$PACKAGE_NAME" >"$work/unpacked/PACKAGE"
     rm -rf "$APP.old"
     [[ -d "$APP" ]] && mv "$APP" "$APP.old"
     mv "$work/unpacked" "$APP"
@@ -215,6 +257,7 @@ check_runtime_libraries() {
             libgomp.so*) packages+=(libgomp1) ;;
             libstdc++.so*) packages+=(libstdc++6) ;;
             libgcc_s.so*) packages+=(libgcc-s1) ;;
+            libcuda.so*) die "the NVIDIA driver library ($lib) is missing; install the NVIDIA driver or use --gpu cpu" ;;
             *) die "a required library is missing: $lib" ;;
         esac
     done <<<"$missing"
@@ -273,6 +316,7 @@ build_from_source() {
 
     step "Checking the source"
     local -a submodules=(ggml thirdparty/libwebp thirdparty/libwebm) missing_submodules=()
+    [[ "$GPU" == cuda ]] && submodules+=(thirdparty/cutlass)
     if [[ ! -d "$SRC/.git" ]]; then
         warn "cloning $REPO_URL ($BRANCH)"
         git clone --branch "$BRANCH" "$REPO_URL" "$SRC"
@@ -301,8 +345,18 @@ build_from_source() {
     elif [[ $IN_CHECKOUT -eq 1 ]] && [[ -n "$(git -C "$SRC" status --porcelain --untracked-files=no)" ]]; then
         needs_build=1
     fi
+    local -a backend=(-DGGML_NATIVE=ON) label="CPU, tuned for this processor"
+    if [[ "$GPU" == cuda ]]; then
+        local nvcc
+        nvcc="$(command -v nvcc || true)"
+        [[ -n "$nvcc" || ! -x /usr/local/cuda/bin/nvcc ]] || nvcc=/usr/local/cuda/bin/nvcc
+        [[ -n "$nvcc" ]] || die "building for CUDA needs the CUDA toolkit (nvcc, 12.x). Install it from developer.nvidia.com/cuda-downloads, or use the ready-built CUDA package (run without --from-source)."
+        ok "$("$nvcc" --version | grep -oE 'release [0-9.]+' | sed 's/release/CUDA/')"
+        backend+=(-DSD_CUDA=ON -DCMAKE_CUDA_COMPILER="$nvcc" -DCMAKE_CUDA_ARCHITECTURES=native)
+        label="CUDA for this GPU and CPU; the first build takes 15-40 minutes"
+    fi
     if [[ $needs_build -eq 1 ]]; then
-        step "Building sd.cpp (CPU, tuned for this processor; the first build takes several minutes)"
+        step "Building sd.cpp ($label)"
         mkdir -p "$BUILD"
         local log="$BUILD/build.log" mem_gb jobs started
         # Large translation units need up to ~2 GB each; one job per CPU thread can exhaust RAM.
@@ -314,7 +368,7 @@ build_from_source() {
         started=$SECONDS
         if ! {
             cmake -S "$SRC" -B "$BUILD" -G Ninja -DCMAKE_BUILD_TYPE=Release \
-                -DGGML_NATIVE=ON -DSD_SERVER_BUILD_FRONTEND=ON &&
+                "${backend[@]}" -DSD_SERVER_BUILD_FRONTEND=ON &&
             cmake --build "$BUILD" --target sd-server sd-cli -j "$jobs"
         } >"$log" 2>&1; then
             tail -n 40 "$log" >&2
@@ -382,6 +436,9 @@ else
     echo "    ${DIM}folders: not chosen yet; the browser asks for them first${RESET}"
 fi
 echo "    ${DIM}$THREADS threads, ${ram_gb} GB RAM, ${free_gb} GB free disk${RESET}"
+if [[ "$GPU" == cuda ]]; then
+    nvidia-smi --query-gpu=name,memory.total --format=csv,noheader 2>/dev/null | sed "s/^/    ${DIM}GPU: /; s/\$/${RESET}/"
+fi
 [[ "$free_gb" -ge 30 ]] || warn "less than 30 GB free; the models need 11-23 GB each"
 echo
 echo "    Open ${BOLD}$URL${RESET}${LAN_URL:+  (other devices: $LAN_URL)}"
@@ -399,8 +456,12 @@ echo
     done
 ) &
 
+# CPU: keep every weight in RAM. GPU: --auto-fit (on by default) puts weights in VRAM first.
+GPU_ARGS=()
+[[ "$GPU" == cuda ]] || GPU_ARGS=(--auto-fit off)
+
 cd "$HOME_DIR"
 exec "$SERVER_BIN" \
     --listen-ip "$HOST" --listen-port "$PORT" \
     --settings-file "$SETTINGS" \
-    --mmap --auto-fit off --vae-tiling -t "$THREADS"
+    --mmap --vae-tiling -t "$THREADS" "${GPU_ARGS[@]}"

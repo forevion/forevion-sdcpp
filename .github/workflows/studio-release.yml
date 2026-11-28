@@ -5,6 +5,11 @@ name: Studio release
 # branch, usually master) and publishes them as a GitHub Release tagged studio-<date>-<commit>.
 on:
   workflow_dispatch:
+    inputs:
+      publish:
+        description: Publish the packages as a GitHub Release (off = only build them, as workflow artifacts)
+        type: boolean
+        default: true
 
 permissions:
   contents: read
@@ -55,6 +60,7 @@ jobs:
           cp thirdparty/libwebm/LICENSE.TXT "$pkg/libwebm.txt"
           cp thirdparty/libwebp/COPYING "$pkg/libwebp.txt"
           git rev-parse --short HEAD > "$pkg/VERSION"
+          echo "$pkg" > "$pkg/PACKAGE"
           "$pkg/sd-server" --version
           tar -czf "$pkg.tar.gz" "$pkg"
 
@@ -62,6 +68,66 @@ jobs:
         with:
           name: sdcpp-studio-linux-x64
           path: sdcpp-studio-linux-x64.tar.gz
+
+  linux-cuda:
+    # NVIDIA GPUs. Built in the CUDA 12.8 image on Ubuntu 22.04 (glibc 2.35) for Turing (T4) to
+    # Blackwell (RTX 50, RTX PRO 6000); the CUDA runtime and cuBLAS are bundled, so the target
+    # machine only needs the NVIDIA driver (575 or newer for CUDA 12.8).
+    runs-on: ubuntu-22.04
+    container: nvidia/cuda:12.8.1-devel-ubuntu22.04
+    steps:
+      - name: Tools
+        run: |
+          apt-get update
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates curl cmake ninja-build xz-utils
+          git config --global --add safe.directory '*'
+
+      - uses: actions/checkout@v6
+
+      - name: Submodules
+        run: git submodule update --init --depth 1 ggml thirdparty/libwebp thirdparty/libwebm thirdparty/cutlass
+
+      - uses: actions/setup-node@v5
+        with:
+          node-version: 24
+
+      - uses: pnpm/action-setup@v5
+        with:
+          version: 10.15.1
+
+      - name: Build
+        run: |
+          cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release $CPU_PORTABLE \
+            -DSD_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES='75;80;86;89;90;120' \
+            -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH='$ORIGIN'
+          cmake --build build --target sd-server sd-cli -j "$(nproc)"
+
+      - name: Package
+        run: |
+          pkg=sdcpp-studio-linux-x64-cuda
+          mkdir -p "$pkg"
+          cp -a build/bin/. "$pkg/"
+          cp -a /usr/local/cuda/lib64/libcudart.so.12* /usr/local/cuda/lib64/libcublas.so.12* /usr/local/cuda/lib64/libcublasLt.so.12* "$pkg/"
+          cp scripts/setup-sdcpp.sh "$pkg/"
+          cp LICENSE "$pkg/stable-diffusion.cpp.txt"
+          cp ggml/LICENSE "$pkg/ggml.txt"
+          cp thirdparty/libwebm/LICENSE.TXT "$pkg/libwebm.txt"
+          cp thirdparty/libwebp/COPYING "$pkg/libwebp.txt"
+          cp thirdparty/cutlass/LICENSE.txt "$pkg/cutlass.txt"
+          cp /usr/local/cuda/EULA.txt "$pkg/cuda-EULA.txt" 2>/dev/null || true
+          git rev-parse --short HEAD > "$pkg/VERSION"
+          echo "$pkg" > "$pkg/PACKAGE"
+          # No GPU driver on the build machine: the toolkit's stub stands in for libcuda.so.1.
+          mkdir -p /tmp/cuda-stub && ln -sf /usr/local/cuda/lib64/stubs/libcuda.so /tmp/cuda-stub/libcuda.so.1
+          LD_LIBRARY_PATH=/tmp/cuda-stub "$pkg/sd-server" --version
+          ldd "$pkg/libstable-diffusion.so" | grep -E 'cuda|cublas' || true
+          tar -czf "$pkg.tar.gz" "$pkg"
+          ls -lh "$pkg.tar.gz"
+
+      - uses: actions/upload-artifact@v6
+        with:
+          name: sdcpp-studio-linux-x64-cuda
+          path: sdcpp-studio-linux-x64-cuda.tar.gz
 
   windows:
     runs-on: windows-2022
@@ -119,7 +185,8 @@ jobs:
           path: sdcpp-studio-windows-x64.zip
 
   release:
-    needs: [linux, windows]
+    if: ${{ inputs.publish }}
+    needs: [linux, linux-cuda, windows]
     runs-on: ubuntu-latest
     permissions:
       contents: write
@@ -141,16 +208,18 @@ jobs:
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
-          name: sd.cpp Studio ${{ steps.meta.outputs.tag }}
+          name: Forevion Studio ${{ steps.meta.outputs.tag }}
           make_latest: true
           body: |
-            CPU builds of sd-server and sd-cli with the Studio Web UI, from ${{ github.sha }}.
+            Builds of sd-server and sd-cli with the Studio Web UI, from ${{ github.sha }}.
 
             - **Linux x64** (`sdcpp-studio-linux-x64.tar.gz`): glibc 2.35+ (Ubuntu 22.04+, Zorin OS 17+). Easiest: run `setup-sdcpp.sh` (also inside the archive), which downloads and starts this release.
+            - **Linux x64 + NVIDIA GPU** (`sdcpp-studio-linux-x64-cuda.tar.gz`): CUDA 12.8 build for T4 / A100 / A10 / L4 / L40S / RTX 30-50 / H100 / RTX PRO 6000 class GPUs; needs the NVIDIA driver 575+. `setup-sdcpp.sh` picks it automatically when `nvidia-smi` finds a GPU.
             - **Windows x64** (`sdcpp-studio-windows-x64.zip`): unzip and double-click `start-studio.bat`.
 
             Models are downloaded from the Models page. Check files against `SHA256SUMS.txt`.
           files: |
             dist/sdcpp-studio-linux-x64.tar.gz
+            dist/sdcpp-studio-linux-x64-cuda.tar.gz
             dist/sdcpp-studio-windows-x64.zip
             dist/SHA256SUMS.txt
