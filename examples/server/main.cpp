@@ -167,6 +167,14 @@ int main(int argc, const char** argv) {
     register_download_endpoints(svr, runtime);
     register_model_manager_endpoints(svr, runtime);
 
+    // Failed API requests show up in the terminal with the error the client received.
+    svr.set_logger([](const httplib::Request& req, const httplib::Response& res) {
+        if (res.status < 400 || req.path == "/favicon.ico")
+            return;
+        std::string body = res.body.size() > 300 ? res.body.substr(0, 300) + "..." : res.body;
+        LOG_WARN("%s %s -> HTTP %d %s", req.method.c_str(), req.path.c_str(), res.status, body.c_str());
+    });
+
     LOG_INFO("listening on: http://%s:%d\n", svr_params.listen_ip.c_str(), svr_params.listen_port);
     svr.listen(svr_params.listen_ip, svr_params.listen_port);
     stop_downloads();

@@ -1,10 +1,12 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 
 import ConfirmDialog from "./components/ConfirmDialog.vue";
 import DglWorkspace from "./components/DglWorkspace.vue";
 import Icon from "./components/Icon.vue";
 import QueuePanel from "./components/QueuePanel.vue";
+import { APP_NAME, logoSvg } from "./lib/brand";
+import { navigation } from "./lib/modelActions";
 import { activeJobs, enterCreate, loadCatalog, loadDownloads, loadOutputs, startPolling, state } from "./lib/store";
 import CreateView from "./views/CreateView.vue";
 import GalleryView from "./views/GalleryView.vue";
@@ -33,8 +35,32 @@ function go(next: Page) {
 }
 
 const runningCount = computed(() => activeJobs.value.length);
+const logo = logoSvg;
+
+// The tab shows the page and how many jobs are running, so a background tab still tells you.
+watch(
+    [page, runningCount],
+    ([current, running]) => {
+        const label = pages.find((p) => p.id === current)?.label || "";
+        document.title = `${running ? `(${running} running) ` : ""}${label} · ${APP_NAME}`;
+    },
+    { immediate: true },
+);
 const downloading = computed(
     () => state.downloads?.packages.filter((p) => ["queued", "starting", "downloading", "verifying", "packing"].includes(p.status.state)).length ?? 0,
+);
+
+watch(
+    () => navigation.page,
+    (next) => {
+        if (!next) return;
+        navigation.page = "";
+        // Opening Create for a chosen model keeps the prompt; only the model changes.
+        if (next === "create") {
+            page.value = "create";
+            history.replaceState(null, "", "#create");
+        } else go(next);
+    },
 );
 
 onMounted(async () => {
@@ -47,12 +73,7 @@ onMounted(async () => {
 <template>
     <div class="shell">
         <nav class="rail" aria-label="Main">
-            <div class="brand" title="stable-diffusion.cpp Studio">
-                <svg width="26" height="26" viewBox="0 0 64 64" aria-hidden="true">
-                    <rect x="4" y="4" width="56" height="56" rx="16" fill="#1d1d26" />
-                    <path d="M24 20l22 12-22 12z" fill="#9d8cff" />
-                </svg>
-            </div>
+            <div class="brand" :title="APP_NAME" aria-hidden="true" v-html="logo" />
             <button
                 v-for="item in pages"
                 :key="item.id"
@@ -103,7 +124,15 @@ onMounted(async () => {
 }
 
 .brand {
+    width: 30px;
+    height: 30px;
     margin-bottom: 14px;
+}
+
+.brand :deep(svg) {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 .rail-item {

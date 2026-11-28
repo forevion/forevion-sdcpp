@@ -111,6 +111,8 @@ export interface OutputEntry extends JobSummary {
     elapsed_ms: number;
     frame_count?: number;
     rendered_frames?: number | null;
+    preview_url?: string;
+    has_audio?: boolean;
     stage_ms?: Record<string, number>;
     generation_info?: unknown;
 }

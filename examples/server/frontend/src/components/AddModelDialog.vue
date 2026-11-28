@@ -113,9 +113,9 @@ async function add() {
             <p v-else-if="!info && isHuggingFace" class="faint small">Check looks up the size and checksum on Hugging Face.</p>
 
             <footer class="actions">
-                <button class="btn-secondary" type="button" :disabled="busy" @click="check">{{ busy && !info ? "Checking…" : "Check" }}</button>
+                <button class="btn-secondary" type="button" :disabled="busy" @click="check"><span v-if="busy && !info" class="spin" />{{ busy && !info ? "Checking…" : "Check" }}</button>
                 <button class="btn" type="submit" :disabled="busy || !info || info.exists">
-                    <Icon name="download" :size="16" />Add and download{{ info?.size ? ` ${formatBytes(info.size)}` : "" }}
+                    <span v-if="busy && info" class="spin" /><Icon v-else name="download" :size="16" />Add and download{{ info?.size ? ` ${formatBytes(info.size)}` : "" }}
                 </button>
             </footer>
         </form>

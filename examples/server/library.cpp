@@ -186,6 +186,8 @@ void save_job_outputs(const ServerRuntime& runtime, const AsyncGenerationJob& jo
                 item_meta["seed"] = std::stoll(seed);
         if (!write_file(dir / name, bytes) || !write_file(dir / (fs::path(name).stem().string() + ".json"), item_meta.dump(2)))
             LOG_WARN("cannot write output %s", (dir / name).u8string().c_str());
+        else
+            LOG_INFO("job %s: saved %s", job.id.c_str(), (dir / name).u8string().c_str());
     };
 
     if (job.kind == AsyncJobKind::VidGen) {
@@ -194,6 +196,14 @@ void save_job_outputs(const ServerRuntime& runtime, const AsyncGenerationJob& jo
         item["fps"]         = job.result_fps;
         item["generation_info"] = job.result_generation_info;
         const std::string extension = job.result_media_mime_type == "image/png" ? "png" : job.vid_gen.output_format;
+        if (!job.result_preview_b64.empty()) {
+            std::string preview;
+            if (decode_base64(job.result_preview_b64, preview) && write_file(dir / (base + "-preview.webm"), preview)) {
+                item["preview_file"] = base + "-preview.webm";
+                item["preview_url"]  = "/sdcpp/v1/outputs/files/" + base + "-preview.webm";
+            }
+            item["has_audio"] = true;
+        }
         if (job.vid_gen.still_frame >= 0) {
             item["rendered_frames"] = item.value("video_frames", json(nullptr));
             item["video_frames"]    = 1;
@@ -294,6 +304,7 @@ void register_library_endpoints(httplib::Server& svr, ServerRuntime& runtime) {
         std::error_code error;
         const bool removed = fs::remove(dir / name, error);
         fs::remove(dir / (fs::path(name).stem().string() + ".json"), error);
+        fs::remove(dir / (fs::path(name).stem().string() + "-preview.webm"), error);
         res.status = removed ? 200 : 404;
         res.set_content(json({{"deleted", removed}}).dump(), "application/json");
     });

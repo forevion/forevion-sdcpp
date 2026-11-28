@@ -111,7 +111,8 @@ function when(ms: number) {
 
         <div class="grid-wrap">
             <p v-if="!state.outputsEnabled" class="status-message">Saving is off on this server (started with --output-dir none).</p>
-            <div v-if="items.length || pending.length" class="grid">
+            <p v-if="state.loading.outputs" class="loading-row"><span class="spin" />Loading the gallery…</p>
+            <div v-else-if="items.length || pending.length" class="grid">
                 <div v-for="job in pending" :key="job.id" class="tile pending">
                     <div class="pending-body">
                         <div class="ring" />
@@ -139,13 +140,13 @@ function when(ms: number) {
                 <option v-for="r in readyRecipes" :key="r.id" :value="r.id">{{ r.name }}</option>
             </select>
             <div class="segmented mode" role="group" aria-label="Output type">
-                <button type="button" title="Video" :aria-pressed="state.form.mode === 'video'" :disabled="!recipeIsVideo(currentRecipe)" @click="state.form.mode = 'video'"><Icon name="video" :size="16" /></button>
-                <button type="button" title="Image" :aria-pressed="state.form.mode === 'image'" @click="state.form.mode = 'image'"><Icon name="image" :size="16" /></button>
+                <button type="button" title="Text → video" :aria-pressed="state.form.task === 't2v'" :disabled="!recipeIsVideo(currentRecipe)" @click="state.form.task = 't2v'"><Icon name="video" :size="16" /></button>
+                <button type="button" title="Text → image" :aria-pressed="state.form.task === 't2i'" @click="state.form.task = 't2i'"><Icon name="image" :size="16" /></button>
             </div>
             <input v-model="state.form.prompt" class="input prompt" placeholder="Describe your video…" />
             <span class="bar-info faint">{{ plan.width }}×{{ plan.height }}<template v-if="plan.video"> · {{ plan.seconds.toFixed(1) }}s</template></span>
             <button class="btn" type="submit" :disabled="!state.form.prompt.trim() || submitting || !readyRecipes.length">
-                <Icon name="sparkles" :size="16" />Go
+                <span v-if="submitting" class="spin" /><Icon v-else name="sparkles" :size="16" />Go
             </button>
         </form>
 

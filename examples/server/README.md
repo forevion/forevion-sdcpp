@@ -24,7 +24,8 @@ server-local defaults.
 
 ### Ready-built packages
 
-Each merge into `master` publishes a `studio-<date>-<commit>` release on the
+Running the **Studio release** workflow by hand (Actions tab, pick `master`) publishes a
+`studio-<date>-<commit>` release on the
 [releases page](https://github.com/forevion/forevion-sdcpp/releases) with CPU builds that
 include the Web UI. One package runs on any x86-64 CPU and picks the fastest code path
 (AVX2, AVX-512, ...) when it starts:
@@ -106,6 +107,11 @@ server. Keep the console window open while using the Web UI.
 sh ./start-server.sh
 ```
 
+On a Linux desktop you can also double-click `start-server.sh` (choose **Run** if the
+file manager asks). When it is not started from a terminal, it opens one
+(GNOME Terminal, Konsole, xfce4-terminal, xterm and others) so the log stays visible,
+and keeps the window open after the server stops.
+
 To start the executable directly instead, run from the build directory:
 
 **Windows (PowerShell)**
@@ -127,56 +133,81 @@ while using the browser.
 
 ### Get models
 
-**Models** has three tabs.
+**Models** shows one card per model with its state (Not downloaded, Downloading,
+Partly downloaded, Needs setup, Ready, Missing files), what it can do (text to video,
+image to video, sound, lip sync, ...) and one button for the next step:
 
-- **Download** lists the download packages. **Download** saves a package's files into
-  their category folders (`diffusion_models/`, `text_encoders/`, `vae/`, ...) with
-  progress, speed and time left; **Stop** keeps the downloaded part so **Resume**
-  continues from there. The trash button deletes a package's downloaded files after a
-  confirmation that lists them and says which other packages or configs use them.
-  **Add model** adds a single file from a link (Hugging Face links get their size and
-  SHA-256 automatically), **New package** and the pencil button create or edit packages,
-  and **Refresh catalog** re-reads the online catalog.
-- **Installed files** lists every model file with its size, the configs that use it and
-  the free disk space, and deletes files after a confirmation.
-- **Model configs** is where a model becomes usable. **New model config** shows every
-  input type (diffusion model, text encoders, tokenizer, VAE, tiny decoder, and more
-  under **More inputs**); pick a file for each input the model needs, set the defaults
-  and save. A **setup guide** for each downloadable model says which file goes into which
-  input and which settings it needs; **Create config** fills a new config from it for you
-  to check and save. Configs can be edited, copied and deleted, and **Backup** /
-  **Restore** save or load all configs and added packages as one JSON file.
+- **Download** saves the model's files into their category folders (`diffusion_models/`,
+  `text_encoders/`, `vae/`, ...) with progress and time left. **Stop** keeps the
+  downloaded part, so **Resume** continues from there.
+- **Set up** opens the setup guide for a downloaded model: it says which file goes into
+  which input and which settings the model needs, and creates a *variant* (a saved
+  combination of files and defaults) for you to check and save.
+- **Use** opens **Create** with that model selected.
 
-Downloads do not create configs by themselves. Files placed by hand in the category
-folders (see [Model directories](#model-directories)) work the same way; **Rescan
-folder** picks up changes.
+**Details** shows a model's description, its variants (edit, copy, delete), its files
+(delete the downloaded files after a confirmation that lists them and says which other
+models use them) and, under **Advanced**, the raw download entry.
+
+**Add your own model** is a short wizard: pick the model type, choose a file for each
+input it needs (it lists what is still missing), set the defaults and save.
+
+**Settings** holds:
+
+- **Storage**: every model file with its size, the variants that use it and the free
+  disk space; files can be deleted after a confirmation.
+- **Backup and restore**: save or load all variants and added downloads as one JSON file.
+- **Model list**: refresh the online model list, rescan the model folders, add a single
+  file from a link (Hugging Face links get their size and SHA-256 automatically) or a
+  new download entry.
+
+Downloads never create variants by themselves. Files placed by hand in the category
+folders (see [Model directories](#model-directories)) work the same way after a rescan.
 
 ### Create images and videos
 
-1. Open **Create** and pick a model config. Only configs whose files are all present
-   are listed as cards. **Model files** shows a picker for every input of the chosen
-   config; changing one affects your next jobs, and **Save as model config** stores the
-   combination. **Other model…** lists built-in model types whose files you pick yourself.
-   **Generate** stays disabled until every required input has a file.
-2. Choose **Video** or **Image**, type a prompt, and pick **Shape** (16:9, 4:3, 1:1,
-   9:16), **Size** (Small or Normal, based on the model's default resolution) and, for
-   video, **Length** in seconds.
-3. Click **Generate** (or press Ctrl+Enter). While a job runs the preview shows the
-   current stage, step, elapsed time and time left; **Stop** cancels it. More jobs can
-   be added while one runs; they wait in the **Queue**.
-4. The result appears in the preview with **Reuse** (copy its settings back into the
-   form), **Save**, **Delete** and close buttons, and in the **Recent** strip.
+1. Open **Create** and pick a model. Only models whose files are all present are listed.
+   **Model files** shows a picker for every input of the chosen variant; **Save as
+   variant** stores a changed combination.
+2. Pick what to make under **What to make**. The list depends on the model: text to
+   video, image to video, sound to video (lip sync), reference to video, video to video,
+   text to image, image to image or image edit.
+3. Add the inputs the task needs under **Inputs**: a start image (optional for some
+   models, required for image to video), an end frame, reference images, an audio clip
+   (any format the browser can decode, sent as WAV, up to 30 s) or a control video
+   (its frames are extracted in the browser). Image to image also has a **Strength**
+   slider. A message says which required input is still missing.
+4. Type a prompt and pick **Shape**, **Size** and, for video, **Length**.
+5. Click **Generate** (or press Ctrl+Enter). The preview shows the current stage, step,
+   elapsed time and time left; **Stop** cancels it. More jobs wait in the **Queue**.
+6. The result appears in the preview with **Reuse**, **Save**, **Delete** and close
+   buttons, and in the **Recent** strip.
+
+**Command** shows what the job runs: the matching `sd-cli` command (PowerShell or
+bash, depending on the server's model folder), the JSON request for
+`/sdcpp/v1/vid_gen` or `img_gen` (images left out) and a `curl` line to send it.
 
 **Advanced** holds the negative prompt, steps, CFG, FPS and a fixed seed; empty fields
-use the model's defaults. **New** clears the prompt, these overrides and the preview.
+use the model's defaults. **New** clears the prompt, the inputs, these overrides and
+the preview.
+
+Models that make sound (they have an audio VAE) are saved as AVI with the soundtrack,
+because WebM output is silent. The server also saves a silent WebM preview for the
+browser; the saved AVI keeps the sound. Results with sound show a ♪ badge.
 
 The **Gallery** lists every saved result with search and Video/Image filters. Its
-prompt bar at the bottom starts a job with the current Create settings, and running
-jobs show as placeholder tiles. Click a tile to view it full size with its settings,
-reuse them, save the file or delete it.
+prompt bar at the bottom starts a text-to-video or text-to-image job with the current
+Create settings, and running jobs show as placeholder tiles. Click a tile to view it
+full size with its settings, reuse them, save the file or delete it.
 
-The new UI does not yet offer LoRAs, start/end frames, reference images or manual
-component selection. Use the native API or DGL scripts for those.
+The new UI does not yet offer LoRAs. Use the native API or DGL scripts for those.
+
+### Server log
+
+The terminal shows each job as it runs: when it is queued (model, size, frames, steps
+and prompt), started, each stage and sampling step, when it is saved, and whether it
+finished, failed or was cancelled. Failed API requests are logged with their HTTP
+status and error message.
 
 ### DGL editor
 

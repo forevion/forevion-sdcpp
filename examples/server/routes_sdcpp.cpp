@@ -518,6 +518,16 @@ static void submit_generation_job(ServerRuntime& runtime, const httplib::Request
             manager.queue.push_back(job->id);
         }
         manager.cv.notify_one();
+        {
+            const json& s       = job->summary;
+            std::string prompt  = s.value("prompt", "");
+            if (prompt.size() > 80)
+                prompt = prompt.substr(0, 77) + "...";
+            const auto number   = [&](const char* key) { return s.contains(key) && s[key].is_number() ? s[key].get<long long>() : 0LL; };
+            LOG_INFO("job %s: queued %s, %s, %lldx%lld, %lld frame(s), %lld steps: \"%s\"", job->id.c_str(),
+                     async_job_kind_name(job->kind), s.value("recipe", "current model").c_str(), number("width"), number("height"),
+                     std::max(1LL, number("video_frames")), number("steps"), prompt.c_str());
+        }
 
         json out;
         out["id"]       = job->id;

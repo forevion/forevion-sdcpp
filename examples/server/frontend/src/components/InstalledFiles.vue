@@ -13,6 +13,7 @@ const error = ref("");
 const filter = ref("all");
 const search = ref("");
 const busy = ref("");
+const loading = ref(false);
 
 const categories = computed(() => [...new Set((storage.value?.files || []).map((f) => f.category))].sort());
 const files = computed(() => {
@@ -24,11 +25,14 @@ const files = computed(() => {
 const totalSize = computed(() => files.value.reduce((sum, f) => sum + f.size, 0));
 
 async function load() {
+    loading.value = true;
     try {
         storage.value = await api.storage();
         error.value = "";
     } catch (e) {
         error.value = (e as Error).message;
+    } finally {
+        loading.value = false;
     }
 }
 
@@ -83,12 +87,15 @@ defineExpose({ load });
             </select>
             <span class="spacer" />
             <span class="faint">{{ files.length }} files · {{ formatBytes(totalSize) }}</span>
-            <button class="btn-ghost icon-btn" type="button" title="Refresh" aria-label="Refresh" @click="load"><Icon name="refresh" :size="16" /></button>
+            <button class="btn-ghost icon-btn" type="button" title="Refresh" aria-label="Refresh" :disabled="loading" @click="load">
+                <span v-if="loading" class="spin" /><Icon v-else name="refresh" :size="16" />
+            </button>
         </div>
 
         <p v-if="error" class="status-message status-message--error">{{ error }}</p>
 
-        <div class="table panel">
+        <p v-if="loading && !storage" class="loading-row"><span class="spin" />Reading the model folders…</p>
+        <div v-else class="table panel">
             <div v-for="file in files" :key="file.id" class="row">
                 <div class="main">
                     <span class="mono name">{{ file.name }}</span>
@@ -109,7 +116,7 @@ defineExpose({ load });
                         :title="file.loaded ? 'Part of the loaded model' : 'Delete this file'"
                         @click="remove(file)"
                     >
-                        <Icon name="trash" :size="16" />Delete
+                        <span v-if="busy === file.id" class="spin" /><Icon v-else name="trash" :size="16" />{{ busy === file.id ? "Deleting…" : "Delete" }}
                     </button>
                 </div>
             </div>
