@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch } from "vue";
+import { computed, nextTick, ref, watch } from "vue";
 
 import Icon from "./Icon.vue";
 import { api } from "../lib/api";
@@ -7,10 +7,11 @@ import { categoryLabel, categoryOrder } from "../lib/categories";
 import { formatBytes } from "../lib/store";
 import type { CustomModelInfo } from "../lib/types";
 
+const props = defineProps<{ category?: string }>();
 const emit = defineEmits<{ (e: "close"): void; (e: "added", id: string): void }>();
 
 const url = ref("");
-const category = ref("diffusion_models");
+const category = ref(props.category || "diffusion_models");
 const filename = ref("");
 const name = ref("");
 const info = ref<CustomModelInfo | null>(null);
@@ -42,8 +43,13 @@ async function check() {
     busy.value = true;
     error.value = "";
     try {
-        info.value = await api.addCustomModel(request(true));
-        if (!filename.value.trim()) filename.value = info.value.path.split("/").pop() || "";
+        const result = await api.addCustomModel(request(true));
+        // Filling "Save as" triggers the reset watcher; set the result after it ran.
+        if (!filename.value.trim()) {
+            filename.value = result.path.split("/").pop() || "";
+            await nextTick();
+        }
+        info.value = result;
     } catch (e) {
         error.value = (e as Error).message;
     } finally {
@@ -71,7 +77,7 @@ async function add() {
     <div class="overlay" role="dialog" aria-modal="true" aria-labelledby="add-model-title" @click.self="emit('close')">
         <form class="dialog panel" @submit.prevent="add">
             <header class="head">
-                <h2 id="add-model-title">Add a model</h2>
+                <h2 id="add-model-title">{{ props.category === "loras" ? "Add a LoRA" : "Add a model" }}</h2>
                 <button class="btn-ghost icon-btn" type="button" aria-label="Close" @click="emit('close')"><Icon name="close" /></button>
             </header>
 

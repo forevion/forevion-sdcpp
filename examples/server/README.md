@@ -227,8 +227,8 @@ input it needs (it lists what is still missing), set the defaults and save.
 **Settings** holds:
 
 - **Folders**: the models, inputs and outputs folders (see [Choose your folders](#choose-your-folders)).
-- **Storage**: every model file with its size, the variants that use it and the free
-  disk space; files can be deleted after a confirmation.
+- **Storage**: every model file (LoRAs included) with its size, the variants that use
+  it and the free disk space; files can be deleted after a confirmation.
 - **Backup and restore**: save or load all variants and added downloads as one JSON file.
 - **Model list**: where the online model list comes from (**Released (master)**,
   **Latest (develop)**, another address, or off), refresh it, rescan the model folders,
@@ -278,6 +278,17 @@ clip), and **Reuse** puts them back into the form together with the prompt and s
 bash, depending on the server's model folder), the JSON request for
 `/sdcpp/v1/vid_gen` or `img_gen` (images left out) and a `curl` line to send it.
 
+**LoRAs** (folded, shown when the model's recipe allows LoRAs) adds one or more LoRA
+files from the `loras/` (or `Lora/`) folder of the model folders, each with a
+**Strength** slider. Models with separate high-noise and low-noise experts (Wan 2.2
+A14B) also choose which expert a LoRA changes: **Both**, **High noise** or **Low noise**.
+A note warns when a LoRA's file name points at another model family (for example a
+Wan 14B LoRA on Wan 2.2 5B). **Add LoRA from a link** downloads a LoRA file from a
+link into `loras/`. LoRA choices are kept per model, are saved with each result
+(`lora` in the sidecar), are put back by **Reuse** and are listed in the Gallery
+details. The `sd-cli` command adds them as `<lora:file:strength>` prompt tags with
+`--lora-model-dir`.
+
 **Advanced** holds the negative prompt, steps, CFG, FPS and a fixed seed; empty fields
 use the model's defaults. **New** clears the prompt, the inputs, these overrides and
 the preview.
@@ -290,8 +301,6 @@ The **Gallery** lists every saved result with search and Video/Image filters. It
 prompt bar at the bottom starts a text-to-video or text-to-image job with the current
 Create settings, and running jobs show as placeholder tiles. Click a tile to view it
 full size with its settings, reuse them, save the file or delete it.
-
-The new UI does not yet offer LoRAs. Use the native API or DGL scripts for those.
 
 ### Server log
 
@@ -756,7 +765,7 @@ four pages and a queue drawer:
 
 | Page | What it does |
 | --- | --- |
-| Create | Pick a ready model, type a prompt, choose Video or Image, shape, size and length; Advanced holds steps, CFG, FPS, seed and the negative prompt |
+| Create | Pick a ready model, type a prompt, choose Video or Image, shape, size and length; LoRAs adds LoRA files with a strength each; Advanced holds steps, CFG, FPS, seed and the negative prompt |
 | Gallery | Saved results with a prompt bar at the bottom; open an item to reuse its settings, save or delete it |
 | Models | Download packages with progress, speed, cancel and resume |
 | Scripts | DGL script editor |
@@ -775,8 +784,8 @@ to the server in `SDCPP_SERVER` (default `http://127.0.0.1:1234`).
 ### Saved results
 
 Finished image and video jobs are written to `--output-dir` (default `outputs`), each file
-with a `.json` sidecar holding the prompt, settings, seed, stage timings and the URLs of
-the job's saved inputs. The Gallery reads this folder. `--output-dir none` turns saving off.
+with a `.json` sidecar holding the prompt, settings, seed, LoRAs, stage timings and the
+URLs of the job's saved inputs. The Gallery reads this folder. `--output-dir none` turns saving off.
 
 `--input-dir` keeps the uploaded start and end images, reference images, audio and control
 frames of each job, named by their content so a picture used twice is stored once

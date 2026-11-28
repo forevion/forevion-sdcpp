@@ -15,6 +15,7 @@ import type {
     Recipe,
     FolderListing,
     FolderSettings,
+    LoraFile,
     SystemInfo,
 } from "./types";
 
@@ -71,6 +72,7 @@ export const api = {
     saveRecipe: (recipe: Record<string, unknown>) =>
         fetchJson<{ saved: boolean; errors: CatalogError[] }>(`/sdcpp/v1/recipes/${recipe.id}`, { ...post(recipe), method: "PUT" }),
     deleteRecipe: (id: string) => fetchJson<unknown>(`/sdcpp/v1/recipes/${id}`, { method: "DELETE" }),
+    loras: () => fetchJson<LoraFile[]>("/sdapi/v1/loras", { cache: "no-store" }),
     capabilities: () => fetchJson<{ samplers: string[]; schedulers: string[] }>("/sdcpp/v1/capabilities"),
 };
 

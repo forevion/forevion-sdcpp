@@ -663,10 +663,7 @@ void refresh_model_catalog(ServerRuntime& runtime) {
             recipes[item.first] = std::move(item.second.front());
         }
 
-        std::set<std::string> categories;
-        for (const auto& slot : k_model_slots)
-            categories.insert(slot.categories.begin(), slot.categories.end());
-        for (const auto& category : categories) {
+        for (const auto& category : model_categories()) {
             try {
                 for (const auto& directory : model_category_directories(source, category)) {
                     if (!model_path_inside(root, fs::canonical(directory))) {

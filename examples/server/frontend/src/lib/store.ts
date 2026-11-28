@@ -3,10 +3,18 @@ import { computed, reactive, watch } from "vue";
 import { api } from "./api";
 import { availableTasks, producesAudio } from "./tasks";
 import type { TaskId } from "./tasks";
-import type { DownloadCatalog, Job, JobSummaryEntry, ModelFile, OutputEntry, Recipe, SystemInfo } from "./types";
+import type { DownloadCatalog, Job, JobSummaryEntry, LoraEntry, LoraFile, ModelFile, OutputEntry, Recipe, SystemInfo } from "./types";
 
 export type Aspect = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
 export type SizePreset = "small" | "normal";
+// Which expert a LoRA patches on models with separate high-noise and low-noise experts (Wan 2.2 A14B).
+export type LoraStage = "both" | "low" | "high";
+
+export interface LoraPick {
+    path: string;
+    strength: number;
+    stage: LoraStage;
+}
 
 export interface CreateForm {
     recipeId: string;
@@ -26,6 +34,8 @@ export interface CreateForm {
     submittedPrompt: string;
     // Per-model file choices that replace a preset's defaults; "" means "no file" for a slot.
     files: Record<string, Record<string, string>>;
+    // Per-model LoRA choices, by recipe ID.
+    loras: Record<string, LoraPick[]>;
 }
 
 const FORM_KEY = "sdcpp-studio-form";
@@ -48,6 +58,7 @@ function loadForm(): CreateForm {
         fps: null,
         submittedPrompt: "",
         files: {},
+        loras: {},
     };
     try {
         const saved = JSON.parse(localStorage.getItem(FORM_KEY) || "null");
@@ -60,6 +71,7 @@ function loadForm(): CreateForm {
 export const state = reactive({
     recipes: [] as Recipe[],
     files: [] as ModelFile[],
+    loras: [] as LoraFile[],
     jobs: [] as JobSummaryEntry[],
     activeJob: null as Job | null,
     outputs: [] as OutputEntry[],
@@ -171,6 +183,120 @@ export const hasFileChanges = computed(() => {
     return Boolean(recipe && Object.keys(state.form.files[recipe.id] || {}).length);
 });
 
+// ---------- LoRAs ----------
+
+export const loraSupport = computed(() => {
+    const features = currentRecipe.value?.effective_features || {};
+    return {
+        enabled: Boolean(currentRecipe.value) && features.lora !== false,
+        stages: Boolean(features.high_noise) && Boolean(selectedFiles.value.high_noise_diffusion_model),
+    };
+});
+
+export const currentLoras = computed<LoraPick[]>(() => {
+    const recipe = currentRecipe.value;
+    return (recipe && state.form.loras[recipe.id]) || [];
+});
+
+const loraPaths = computed(() => new Set(state.loras.map((l) => l.path)));
+
+export function loraInstalled(path: string) {
+    return loraPaths.value.has(path);
+}
+
+export function setLoras(list: LoraPick[]) {
+    const recipe = currentRecipe.value;
+    if (!recipe) return;
+    const next = { ...state.form.loras };
+    if (list.length) next[recipe.id] = list;
+    else delete next[recipe.id];
+    state.form.loras = next;
+}
+
+export function addLora(path: string) {
+    if (!path || currentLoras.value.some((l) => l.path === path)) return;
+    setLoras([...currentLoras.value, { path, strength: 1, stage: "both" }]);
+}
+
+export function removeLora(index: number) {
+    setLoras(currentLoras.value.filter((_, i) => i !== index));
+}
+
+// The request's `lora` array. A plain entry patches the main (low-noise) model only, so
+// "both" on a two-expert model sends one entry per expert.
+export const loraEntries = computed<LoraEntry[]>(() => {
+    if (!loraSupport.value.enabled) return [];
+    const stages = loraSupport.value.stages;
+    const entries: LoraEntry[] = [];
+    for (const pick of currentLoras.value) {
+        if (!loraInstalled(pick.path)) continue;
+        const stage = stages ? pick.stage : "low";
+        if (stage !== "high") entries.push({ path: pick.path, multiplier: pick.strength });
+        if (stage !== "low") entries.push({ path: pick.path, multiplier: pick.strength, is_high_noise: true });
+    }
+    return entries;
+});
+
+function picksFromEntries(entries: LoraEntry[], twoExperts: boolean): LoraPick[] {
+    const picks: LoraPick[] = [];
+    for (const entry of entries) {
+        const stage: LoraStage = entry.is_high_noise ? "high" : "low";
+        const same = picks.find((p) => p.path === entry.path && p.strength === entry.multiplier && p.stage !== stage && p.stage !== "both");
+        if (same) same.stage = "both";
+        else picks.push({ path: entry.path, strength: entry.multiplier, stage });
+    }
+    if (!twoExperts) for (const pick of picks) pick.stage = "both";
+    return picks;
+}
+
+// Model families a file name can hint at. Order matters: the first match wins.
+const FAMILIES: { id: string; label: string; pattern: RegExp }[] = [
+    { id: "wan", label: "Wan", pattern: /wan|fastwan/ },
+    { id: "kandinsky", label: "Kandinsky", pattern: /kandinsky/ },
+    { id: "ltx", label: "LTX Video", pattern: /ltx/ },
+    { id: "hunyuan", label: "HunyuanVideo", pattern: /hunyuan/ },
+    { id: "qwen", label: "Qwen Image", pattern: /qwen/ },
+    { id: "zimage", label: "Z-Image", pattern: /z[-_ ]?image/ },
+    { id: "flux", label: "FLUX", pattern: /flux/ },
+    { id: "sd3", label: "SD 3", pattern: /sd3|sd[-_ ]3/ },
+    { id: "sdxl", label: "SDXL", pattern: /sdxl|pony|illustrious/ },
+    { id: "sd1", label: "SD 1.5", pattern: /sd[-_ ]?1\.?5|sd15/ },
+];
+const WAN_SIZES: { label: string; pattern: RegExp }[] = [
+    { label: "Wan 2.2 5B", pattern: /5b|ti2v/ },
+    { label: "Wan 14B", pattern: /14b/ },
+    { label: "Wan 1.3B", pattern: /1[._]3b/ },
+];
+
+const familyOf = (text: string) => FAMILIES.find((f) => f.pattern.test(text));
+
+// A warning when a LoRA's file name points at another model family than the chosen model.
+// Names are only a hint, so unknown names never warn.
+export function loraFamilyWarning(path: string): string {
+    const recipe = currentRecipe.value;
+    if (!recipe) return "";
+    const name = path.toLowerCase();
+    const modelText = [recipe.id, recipe.name, ...Object.values(selectedFiles.value)].join(" ").toLowerCase();
+    const lora = familyOf(name);
+    const model = familyOf(modelText);
+    if (!lora || !model) return "";
+    if (lora.id !== model.id) return `The name suggests a ${lora.label} LoRA; this model is ${model.label}.`;
+    if (lora.id === "wan") {
+        const loraSize = WAN_SIZES.find((s) => s.pattern.test(name));
+        const modelSize = WAN_SIZES.find((s) => s.pattern.test(modelText));
+        if (loraSize && modelSize && loraSize !== modelSize) return `The name suggests a ${loraSize.label} LoRA; this model is ${modelSize.label}.`;
+    }
+    return "";
+}
+
+export async function loadLoras() {
+    try {
+        state.loras = await api.loras();
+    } catch {
+        /* keep the previous list */
+    }
+}
+
 // ---------- geometry ----------
 
 const ASPECTS: Record<Aspect, number> = { "16:9": 16 / 9, "9:16": 9 / 16, "1:1": 1, "4:3": 4 / 3, "3:4": 3 / 4 };
@@ -263,6 +389,7 @@ export function buildRequest(): { kind: "img_gen" | "vid_gen"; body: Record<stri
         preview: "proj",
         preview_interval: 1,
     };
+    if (loraEntries.value.length) body.lora = loraEntries.value;
     const sample: Record<string, unknown> = {};
     if (form.steps != null) sample.sample_steps = form.steps;
     if (form.cfg != null) sample.guidance = { txt_cfg: form.cfg };
@@ -392,7 +519,7 @@ export const stageLabels: Record<string, string> = {
 export async function loadCatalog(refresh = false) {
     try {
         if (refresh) await api.refreshModels();
-        const [recipes, files] = await Promise.all([api.recipes(), api.files()]);
+        const [recipes, files] = await Promise.all([api.recipes(), api.files(), loadLoras()]);
         state.recipes = recipes.recipes;
         state.files = files.files;
         if (!state.recipes.some((r) => r.id === state.form.recipeId) && readyRecipes.value.length) {
@@ -550,6 +677,10 @@ export function reuse(output: OutputEntry) {
     if (output.recipe && state.recipes.some((r) => r.id === output.recipe)) {
         form.recipeId = output.recipe;
         if (output.models && Object.keys(output.models).length) form.files = { ...form.files, [output.recipe]: { ...output.models } };
+        const loras = { ...form.loras };
+        if (output.lora?.length) loras[output.recipe] = picksFromEntries(output.lora, Boolean(output.models?.high_noise_diffusion_model));
+        else delete loras[output.recipe];
+        form.loras = loras;
     }
     const frames = output.frame_count || output.video_frames || 1;
     form.mode = frames > 1 ? "video" : "image";

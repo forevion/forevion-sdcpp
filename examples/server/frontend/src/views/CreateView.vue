@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, ref, watch } from "vue";
 
+import AddModelDialog from "../components/AddModelDialog.vue";
 import CommandDialog from "../components/CommandDialog.vue";
 import Icon from "../components/Icon.vue";
 import AudioInput from "../components/AudioInput.vue";
@@ -12,6 +13,14 @@ import { categoryLabel } from "../lib/categories";
 import { confirmDanger } from "../lib/confirm";
 import {
     activeJobs,
+    addLora,
+    currentLoras,
+    loadDownloads,
+    loraFamilyWarning,
+    loraInstalled,
+    loraSupport,
+    removeLora,
+    startPolling,
     cancel,
     chooseFile,
     currentRecipe,
@@ -37,7 +46,7 @@ import {
     state,
     submit,
 } from "../lib/store";
-import type { Aspect } from "../lib/store";
+import type { Aspect, LoraStage } from "../lib/store";
 import { availableTasks, TASK_NOT_IN_SDCPP, TASKS } from "../lib/tasks";
 import type { TaskDef, TaskId } from "../lib/tasks";
 import type { OutputEntry, Recipe } from "../lib/types";
@@ -50,6 +59,33 @@ const submitting = ref(false);
 const savingPreset = ref<Recipe | null>(null);
 const filesOpen = ref(false);
 const showCommand = ref(false);
+const addingLora = ref(false);
+
+const loraChoices = computed(() => {
+    const chosen = new Set(currentLoras.value.map((l) => l.path));
+    return state.loras.filter((l) => !chosen.has(l.path)).sort((a, b) => (a.display_path || a.path).localeCompare(b.display_path || b.path));
+});
+const loraStages: { id: LoraStage; label: string }[] = [
+    { id: "both", label: "Both" },
+    { id: "high", label: "High noise" },
+    { id: "low", label: "Low noise" },
+];
+
+function loraName(path: string) {
+    const file = state.loras.find((l) => l.path === path);
+    return file?.display_path || file?.name || path;
+}
+
+function onLoraPick(event: Event) {
+    const select = event.target as HTMLSelectElement;
+    addLora(select.value);
+    select.value = "";
+}
+
+function onLoraAdded() {
+    loadDownloads();
+    startPolling();
+}
 
 const startImages = computed(() => (state.inputs.startImage ? [{ name: state.inputs.startName, data: state.inputs.startImage }] : []));
 const endImages = computed(() => (state.inputs.endImage ? [{ name: state.inputs.endName, data: state.inputs.endImage }] : []));
@@ -407,6 +443,40 @@ function resetAdvanced() {
                     <input v-model.number="form.seconds" class="range" type="range" min="0.5" :max="maxSeconds" step="0.5" />
                 </div>
 
+                <details v-if="loraSupport.enabled" class="advanced loras">
+                    <summary>
+                        LoRAs
+                        <span v-if="currentLoras.length" class="chip chip--accent">{{ currentLoras.length }}</span>
+                        <Icon name="chevron" :size="14" />
+                    </summary>
+                    <div class="advanced-body">
+                        <div v-for="(lora, index) in currentLoras" :key="lora.path" class="lora">
+                            <div class="lora-head">
+                                <span class="mono ellipsis" :title="lora.path">{{ loraName(lora.path) }}</span>
+                                <button class="btn-ghost icon-btn" type="button" :aria-label="`Remove ${loraName(lora.path)}`" title="Remove" @click="removeLora(index)"><Icon name="close" :size="14" /></button>
+                            </div>
+                            <p v-if="!loraInstalled(lora.path)" class="status-message status-message--error small">This file is not in the LoRA folder any more; it will be skipped.</p>
+                            <p v-else-if="loraFamilyWarning(lora.path)" class="warn small">{{ loraFamilyWarning(lora.path) }} It may do nothing or break the result.</p>
+                            <label class="field">
+                                <span>Strength <b class="value">{{ lora.strength.toFixed(2) }}</b></span>
+                                <input v-model.number="lora.strength" class="range" type="range" min="-1" max="2" step="0.05" :aria-label="`Strength of ${loraName(lora.path)}`" />
+                            </label>
+                            <div v-if="loraSupport.stages" class="field">
+                                <span>Applies to</span>
+                                <div class="segmented" role="group" aria-label="Which expert the LoRA changes">
+                                    <button v-for="stage in loraStages" :key="stage.id" type="button" :aria-pressed="lora.stage === stage.id" @click="lora.stage = stage.id">{{ stage.label }}</button>
+                                </div>
+                            </div>
+                        </div>
+                        <select v-if="loraChoices.length" class="input" aria-label="Add a LoRA" value="" @change="onLoraPick">
+                            <option value="">+ Add a LoRA…</option>
+                            <option v-for="l in loraChoices" :key="l.path" :value="l.path">{{ l.display_path || l.path }}</option>
+                        </select>
+                        <p v-else-if="!state.loras.length" class="faint small">No LoRA files yet. Put .safetensors files in the <span class="mono">loras</span> folder of your models folder, or add one from a link.</p>
+                        <button class="link" type="button" @click="addingLora = true"><Icon name="download" :size="14" />Add LoRA from a link…</button>
+                    </div>
+                </details>
+
                 <details class="advanced">
                     <summary>Advanced <Icon name="chevron" :size="14" /></summary>
                     <div class="advanced-body">
@@ -466,6 +536,7 @@ function resetAdvanced() {
                 </div>
             </template>
             <CommandDialog v-if="showCommand" @close="showCommand = false" />
+            <AddModelDialog v-if="addingLora" category="loras" @close="addingLora = false" @added="onLoraAdded" />
             <PresetEditor v-if="savingPreset" :base="savingPreset" mode="copy" @close="savingPreset = null" @saved="onPresetSaved" />
         </section>
 
@@ -805,6 +876,43 @@ function resetAdvanced() {
 
 .advanced[open] summary svg {
     transform: rotate(90deg);
+}
+
+.lora {
+    display: grid;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid var(--line);
+    border-radius: 10px;
+    background: var(--bg-raised);
+}
+
+.lora-head {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    min-width: 0;
+}
+
+.lora-head .ellipsis {
+    flex: 1;
+    min-width: 0;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    font-size: 13px;
+}
+
+.lora .warn {
+    margin: 0;
+    color: var(--warn);
+}
+
+.loras .link {
+    display: inline-flex;
+    align-items: center;
+    gap: 6px;
+    justify-self: start;
 }
 
 .advanced-body {
