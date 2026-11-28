@@ -21,6 +21,14 @@ fn main({{inputs}}) {
 {% if flags.last %}
     last_frame_pixels = tensor::unsqueeze(image::to_f32(fit_canvas(last_frame, width, height, mode = "nearest"), channels = 3), axis = 2)
 {% endif %}
+{% if flags.reference_tail %}
+{% if flags.encoder_vae %}
+    encoder_vae = load_vae(encoder_vae_path{{encoder_vae_options}})
+    first_latent = vae_to_dit_latents(encoder_vae, vae_encode(encoder_vae, first_frame_pixels, rng = encode_rng))
+{% else %}
+    first_latent = vae_to_dit_latents(vae, vae_encode(vae, first_frame_pixels, rng = encode_rng{{vae_run_options}}))
+{% endif %}
+{% endif %}
     video_shape = tensor::shape(video_base)
 {% if flags.conditioned %}
     video_mask = tensor::full([video_shape[0], video_shape[1], video_shape[2], 1, 1], 1)

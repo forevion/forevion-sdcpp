@@ -471,6 +471,9 @@ namespace Kandinsky6 {
             for (int i = 0; i < config.num_visual_blocks; ++i) {
                 blocks["visual_transformer_blocks." + std::to_string(i)] = std::make_shared<FusedBlock>(config);
             }
+            if (config.visual_token_types > 0) {
+                blocks["visual_token_type_embeddings"] = std::make_shared<Embedding>(config.visual_token_types, config.model_dim);
+            }
         }
 
         // x: [W, H, T, C] -> [N=1, tokens, pt*ph*pw*C] with tokens in (t, h, w) order and features in (ph, pw, c) order.
@@ -504,7 +507,8 @@ namespace Kandinsky6 {
                                  ggml_tensor* audio_x,    // [L_audio, in_audio_dim] or null
                                  ggml_tensor* text_pe,
                                  ggml_tensor* vis_pe,
-                                 ggml_tensor* aud_pe) {
+                                 ggml_tensor* aud_pe,
+                                 ggml_tensor* token_types = nullptr) {  // [tokens] I32 or null
             GGML_ASSERT(x->ne[3] == config.visual_in_channels());
             const int64_t W = x->ne[0], H = x->ne[1], T = x->ne[2];
             GGML_ASSERT(W % 2 == 0 && H % 2 == 0);
@@ -531,6 +535,11 @@ namespace Kandinsky6 {
 
             auto vis_in = std::dynamic_pointer_cast<Linear>(block("visual_embeddings.in_layer"));
             auto vis    = vis_in->forward(ctx, patchify(ctx, x));  // [1, tokens, model_dim]
+            if (token_types != nullptr) {
+                // Only image-conditioned runs add token types; text-to-video adds none, not type 0.
+                auto embed = std::dynamic_pointer_cast<Embedding>(block("visual_token_type_embeddings"));
+                vis        = ggml_add(ctx->ggml_ctx, vis, embed->forward(ctx, token_types));
+            }
 
             ggml_tensor* aud = nullptr;
             if (audio_x != nullptr) {
@@ -581,14 +590,15 @@ namespace Kandinsky6 {
         return sd::Tensor<float>({2, 2, head_dim / 2, length}, std::move(values));
     }
 
-    static sd::Tensor<float> make_rope_3d(int64_t t_len, int64_t h_len, int64_t w_len, const Kandinsky6Config& config) {
+    static sd::Tensor<float> make_rope_3d(const std::vector<int64_t>& t_positions, int64_t h_len, int64_t w_len, const Kandinsky6Config& config) {
+        const int64_t t_len = static_cast<int64_t>(t_positions.size());
         const auto ft = make_freqs(config.axes_dims[0] / 2, config.rope_theta);
         const auto fh = make_freqs(config.axes_dims[1] / 2, config.rope_theta);
         const auto fw = make_freqs(config.axes_dims[2] / 2, config.rope_theta);
         const int64_t half = config.head_dim / 2;
         std::vector<float> values;
         values.reserve(static_cast<size_t>(t_len * h_len * w_len * half * 4));
-        for (int64_t t = 0; t < t_len; ++t) {
+        for (int64_t t : t_positions) {
             for (int64_t h = 0; h < h_len; ++h) {
                 for (int64_t w = 0; w < w_len; ++w) {
                     for (float f : ft) {
@@ -663,6 +673,7 @@ namespace Kandinsky6 {
         Kandinsky6Model model;
         // make_input copies after graph allocation, so graph inputs built here must outlive build_graph.
         sd::Tensor<float> text_pe_, vis_pe_, aud_pe_, zero_cond_;
+        sd::Tensor<int32_t> token_types_;
 
         Kandinsky6Runner(ggml_backend_t backend,
                          const String2TensorStorage& tensor_storage_map      = {},
@@ -691,7 +702,8 @@ namespace Kandinsky6 {
                                  const sd::Tensor<float>& context_tensor,
                                  const sd::Tensor<float>& pooled_tensor,
                                  const sd::Tensor<float>& audio_tensor,
-                                 const sd::Tensor<float>& c_concat_tensor) {
+                                 const sd::Tensor<float>& c_concat_tensor,
+                                 bool reference_tail) {
             ggml_cgraph* gf = new_graph_custom(KANDINSKY6_GRAPH_SIZE);
             auto x          = make_input(x_tensor);
             auto timesteps  = make_input(timesteps_tensor);
@@ -713,9 +725,26 @@ namespace Kandinsky6 {
             }
 
             text_pe_     = make_rope_1d(context->ne[1], config.head_dim, config.rope_theta, 1.f);
-            vis_pe_      = make_rope_3d(T, H / 2, W / 2, config);
+            // An image-conditioned run appends the reference frame as an extra last frame that reuses
+            // frame 0's rotary position and carries token type 1 (the generated frames carry type 0).
+            std::vector<int64_t> t_positions(static_cast<size_t>(T));
+            for (int64_t t = 0; t < T; ++t) {
+                t_positions[static_cast<size_t>(t)] = reference_tail && t == T - 1 ? 0 : t;
+            }
+            vis_pe_      = make_rope_3d(t_positions, H / 2, W / 2, config);
             auto text_pe = make_input(text_pe_);
             auto vis_pe  = make_input(vis_pe_);
+            ggml_tensor* token_types = nullptr;
+            if (reference_tail) {
+                if (config.visual_token_types < 2) {
+                    throw std::runtime_error("this Kandinsky 6 checkpoint has no visual token types for image conditioning");
+                }
+                const int64_t frame_tokens = (W / 2) * (H / 2);
+                token_types_               = sd::Tensor<int32_t>({T * frame_tokens});
+                std::fill_n(token_types_.data(), static_cast<size_t>((T - 1) * frame_tokens), 0);
+                std::fill_n(token_types_.data() + (T - 1) * frame_tokens, static_cast<size_t>(frame_tokens), 1);
+                token_types = make_input(token_types_);
+            }
             ggml_tensor* aud_pe = nullptr;
             if (audio_x != nullptr) {
                 aud_pe_ = make_rope_1d(audio_x->ne[1], config.head_dim, config.rope_theta, config.audio_freqs_scaling);
@@ -723,7 +752,7 @@ namespace Kandinsky6 {
             }
 
             auto runner_ctx = get_context();
-            auto out        = model.forward(&runner_ctx, x, timesteps, context, pooled, audio_x, text_pe, vis_pe, aud_pe);
+            auto out        = model.forward(&runner_ctx, x, timesteps, context, pooled, audio_x, text_pe, vis_pe, aud_pe, token_types);
             ggml_tensor* result = ggml_reshape_1d(compute_ctx, out.video, ggml_nelements(out.video));
             if (out.audio != nullptr) {
                 result = ggml_concat(compute_ctx, result, ggml_reshape_1d(compute_ctx, ggml_cont(compute_ctx, out.audio), ggml_nelements(out.audio)), 0);
@@ -738,9 +767,10 @@ namespace Kandinsky6 {
                                     const sd::Tensor<float>& context,
                                     const sd::Tensor<float>& pooled,
                                     const sd::Tensor<float>& audio_x  = {},
-                                    const sd::Tensor<float>& c_concat = {}) {
+                                    const sd::Tensor<float>& c_concat = {},
+                                    bool reference_tail               = false) {
             auto get_graph = [&]() -> ggml_cgraph* {
-                return build_graph(x, timesteps, context, pooled, audio_x, c_concat);
+                return build_graph(x, timesteps, context, pooled, audio_x, c_concat, reference_tail);
             };
             auto flat = GGMLRunner::compute(get_graph, n_threads, false);
             if (!flat.has_value() || flat->empty()) {
@@ -804,10 +834,41 @@ namespace Kandinsky6 {
                 }
             }
 
-            auto out = compute_av(n_threads, video, *diffusion_params.timesteps, *diffusion_params.context,
-                                  *diffusion_params.y, audio, tensor_or_empty(diffusion_params.c_concat));
+            const sd::Tensor<float>* reference = diffusion_params.ref_latents != nullptr && !diffusion_params.ref_latents->empty()
+                                                     ? &diffusion_params.ref_latents->front()
+                                                     : nullptr;
+            sd::Tensor<float> model_video = video;
+            sd::Tensor<float> cond        = tensor_or_empty(diffusion_params.c_concat);
+            if (reference != nullptr) {
+                // Image to video: the clean first-frame latent rides as an extra masked tail frame.
+                // Each step resets it, so only the generated frames are part of the sampler state.
+                const auto& rs = reference->shape();
+                if (rs.size() < 4 || rs[0] != W || rs[1] != H || rs[2] != 1 || rs[3] != C || reference->numel() != W * H * C) {
+                    throw std::runtime_error("Kandinsky 6 reference image latent must be one frame of the video latent size");
+                }
+                const size_t frame = static_cast<size_t>(W * H);
+                model_video        = sd::Tensor<float>({W, H, T + 1, C});
+                cond               = sd::Tensor<float>::zeros({W, H, T + 1, C + 1});
+                for (int64_t c = 0; c < C; ++c) {
+                    std::copy_n(video.data() + c * T * frame, T * frame, model_video.data() + c * (T + 1) * frame);
+                    std::copy_n(reference->data() + c * frame, frame, model_video.data() + (c * (T + 1) + T) * frame);
+                }
+                std::fill_n(cond.data() + (C * (T + 1) + T) * frame, frame, 1.f);
+            }
+
+            auto out = compute_av(n_threads, model_video, *diffusion_params.timesteps, *diffusion_params.context,
+                                  *diffusion_params.y, audio, cond, reference != nullptr);
             if (out.video.empty() || (audio_n > 0 && out.audio.empty())) {
                 return {};
+            }
+            if (reference != nullptr) {
+                const int64_t out_c = config.out_visual_dim;
+                const size_t frame  = static_cast<size_t>(W * H);
+                sd::Tensor<float> trimmed({W, H, T, out_c});
+                for (int64_t c = 0; c < out_c; ++c) {
+                    std::copy_n(out.video.data() + c * (T + 1) * frame, T * frame, trimmed.data() + c * T * frame);
+                }
+                out.video = std::move(trimmed);
             }
 
             sd::Tensor<float> result(x.shape());

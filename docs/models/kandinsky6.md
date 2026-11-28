@@ -1,9 +1,10 @@
 # Kandinsky 6
 
-Kandinsky 6.0 generates video together with synchronized audio from text. This integration supports
-text-to-video with the Qwen2.5-VL 7B and CLIP-L text encoders, decoded with the HunyuanVideo VAE or the
-TAEHV tiny decoder. The audio latent is denoised together with the video, as the model requires, but is
-not decoded to sound yet.
+Kandinsky 6.0 generates video together with synchronized audio from text, optionally starting from an
+image. This integration supports text-to-video and image-to-video with the Qwen2.5-VL 7B and CLIP-L text
+encoders. Video is decoded with the HunyuanVideo VAE or the TAEHV tiny decoder; the audio latent, denoised
+together with the video, is decoded to a 44.1 kHz mono soundtrack by the MMAudio audio VAE and its BigVGAN
+vocoder.
 
 ## Checkpoints
 
@@ -25,10 +26,17 @@ blocks; its sizes are read from the weights as well. All four share the text enc
 | Kandinsky 6.0 transformer | `transformer/diffusion_pytorch_model.safetensors` from one of the checkpoints above | `--diffusion-model` | Required |
 | Qwen2.5-VL 7B | any of the repositories' `text_encoder/` folder (sharded safetensors; the vision tower is not loaded), or a GGUF converted from it | `--llm` | Required |
 | CLIP-L | any of the repositories' `text_encoder_2/model.safetensors` | `--clip_l` | Required |
-| HunyuanVideo VAE | any of the repositories' `vae/diffusion_pytorch_model.safetensors` (decoder only) | `--vae` | Use this or TAEHV |
+| HunyuanVideo VAE | any of the repositories' `vae/diffusion_pytorch_model.safetensors` | `--vae` | Use this or TAEHV; encodes the start image |
 | TAEHV | [taehv.safetensors](https://github.com/madebyollin/taehv/tree/main/safetensors) (HunyuanVideo 1 tiny autoencoder) | `--taesd` | Use this or the VAE |
+| MMAudio audio VAE | any of the repositories' `audio_vae/diffusion_pytorch_model.safetensors` (1.7 GB, the same file in all four) | `--audio-vae` | For sound |
 
-The VAE gives the sharpest frames; TAEHV decodes about 50 times faster in far less memory.
+The VAE gives the sharpest frames; TAEHV decodes about 50 times faster in far less memory. With both
+`--vae` and `--taesd`, TAEHV decodes and the VAE only encodes the start image.
+
+The audio VAE file also carries the BigVGAN vocoder weights (`vocoder.*`); they are identical to the
+repositories' separate `vocoder/` file, which is not needed. The checkpoints are released under MIT; the
+diffusers audio code credits MMAudio (MIT, Sony Research), BigVGAN (MIT, NVIDIA) and alias-free-torch
+(Apache 2.0).
 
 The transformer and the Qwen2.5-VL folder can be converted once to smaller GGUF files:
 
@@ -45,7 +53,8 @@ Keep CLIP-L unquantized; its pooled vector is sensitive to quantization.
 
 | Example | Description |
 | --- | --- |
-| [Text to video](../dgl/kandinsky6/kandinsky6-lite-distill-txt2video.dgl) | Kandinsky 6.0 Lite distill, 864x480, 49 frames, TAEHV decode. Also runs Pro distill. |
+| [Text to video](../dgl/kandinsky6/kandinsky6-lite-distill-txt2video.dgl) | Kandinsky 6.0 Lite distill, 864x480, 49 frames, TAEHV decode, with sound. Also runs Pro distill. |
+| [Image to video](../dgl/kandinsky6/kandinsky6-lite-distill-img2video.dgl) | Kandinsky 6.0 Lite distill from a start image, with sound. The VAE encodes the image, TAEHV decodes. |
 | [Text to video with CFG](../dgl/kandinsky6/kandinsky6-lite-txt2video.dgl) | Kandinsky 6.0 Lite (non-distilled), 50 steps, CFG 5. Also runs Pro. |
 
 #### Run a script
@@ -84,6 +93,7 @@ CLI examples use the [shared path and shell conventions](README.md#example-conve
   --llm ..\models\kandinsky-6.0-lite-distill\text_encoder `
   --clip_l ..\models\kandinsky-6.0-lite-distill\text_encoder_2\model.safetensors `
   --taesd ..\models\vae\taehv.safetensors `
+  --audio-vae ..\models\vae\kandinsky6-mmaudio-vae.safetensors `
   -p "A red fox trotting through a snowy pine forest at sunrise, soft golden light, cinematic." `
   --cfg-scale 1.0 `
   --steps 10 `
@@ -104,7 +114,58 @@ CLI examples use the [shared path and shell conventions](README.md#example-conve
   --llm ../models/kandinsky-6.0-lite-distill/text_encoder \
   --clip_l ../models/kandinsky-6.0-lite-distill/text_encoder_2/model.safetensors \
   --taesd ../models/vae/taehv.safetensors \
+  --audio-vae ../models/vae/kandinsky6-mmaudio-vae.safetensors \
   -p "A red fox trotting through a snowy pine forest at sunrise, soft golden light, cinematic." \
+  --cfg-scale 1.0 \
+  --steps 10 \
+  -W 864 \
+  -H 480 \
+  --video-frames 49 \
+  --fps 24 \
+  --mmap \
+  -v
+```
+
+#### Image-to-video example
+
+Add the start image with `--init-img`. The full VAE encodes it; `--taesd` may still decode.
+
+**Windows (PowerShell)**
+
+```powershell
+.\bin\Release\sd-cli.exe `
+  -M vid_gen `
+  --diffusion-model ..\models\kandinsky-6.0-lite-distill\transformer\diffusion_pytorch_model.safetensors `
+  --llm ..\models\kandinsky-6.0-lite-distill\text_encoder `
+  --clip_l ..\models\kandinsky-6.0-lite-distill\text_encoder_2\model.safetensors `
+  --vae ..\models\vae\kandinsky6-hunyuanvideo-vae.safetensors `
+  --taesd ..\models\vae\taehv.safetensors `
+  --audio-vae ..\models\vae\kandinsky6-mmaudio-vae.safetensors `
+  --init-img ..\inputs\start_image.png `
+  -p "The fox turns its head towards the camera and barks. Audio: a sharp bark, wind in the pines." `
+  --cfg-scale 1.0 `
+  --steps 10 `
+  -W 864 `
+  -H 480 `
+  --video-frames 49 `
+  --fps 24 `
+  --mmap `
+  -v
+```
+
+**Linux/macOS**
+
+```sh
+./bin/sd-cli \
+  -M vid_gen \
+  --diffusion-model ../models/kandinsky-6.0-lite-distill/transformer/diffusion_pytorch_model.safetensors \
+  --llm ../models/kandinsky-6.0-lite-distill/text_encoder \
+  --clip_l ../models/kandinsky-6.0-lite-distill/text_encoder_2/model.safetensors \
+  --vae ../models/vae/kandinsky6-hunyuanvideo-vae.safetensors \
+  --taesd ../models/vae/taehv.safetensors \
+  --audio-vae ../models/vae/kandinsky6-mmaudio-vae.safetensors \
+  --init-img ../inputs/start_image.png \
+  -p "The fox turns its head towards the camera and barks. Audio: a sharp bark, wind in the pines." \
   --cfg-scale 1.0 \
   --steps 10 \
   -W 864 \
@@ -129,11 +190,26 @@ CLI examples use the [shared path and shell conventions](README.md#example-conve
 - `--video-frames` is aligned to 4n+1 (121 frames is the 5-second clip of the reference pipeline at 24 fps).
   `--fps` sets the length of the jointly denoised audio latent.
 - 864x480 is the native size; width and height must be multiples of 16.
+- Sound: with `--audio-vae` the clip gets a 44.1 kHz mono soundtrack; without it the audio latent is still
+  denoised (the video depends on it) but not decoded. The audio covers 1024 samples per latent step, so it
+  runs up to 23 ms past the last frame. Describe sounds in the prompt, for example after `Audio:`.
+- Image to video: `--init-img` is center-cropped to the video's aspect ratio, resized and encoded as one
+  latent frame. Like the official pipeline, the model sees it as an extra clean frame with its own token
+  type and the first frame's rotary position, and it is restored before every step; the generated first
+  frame follows it closely. The encoder samples the VAE posterior, as diffusers does. End images are not
+  supported. All four checkpoints have the image-conditioning weights.
 
 ## Notes and limitations
 
-- Image-to-video and audio decoding (MMAudio VAE and vocoder) are not supported yet. The HunyuanVideo VAE
-  is decode-only.
+- Audio decoding, measured against diffusers' `MMAudioVAE` + `MMAudioVocoder` (fp32) on the Step 1
+  reference audio latent: mel spectrogram 2e-7 and waveform 1.9e-5 relative L2. The vocoder amplifies
+  small errors about 100 times, so all its convolutions keep F32 patches (ggml's default F16 patches give
+  0.9%). A 5-second soundtrack decodes in 20 s with about 1.9 GB peak memory.
+- Image to video, against the official pipeline's conditioning with fp32 activations at 448x256, 17
+  frames: HunyuanVideo VAE encode (posterior mode) 5e-4 relative L2; update of the first PiFlow step 0.13%
+  video and 0.21% audio with bf16 weights (q8_0: 0.9% / 1.4%, its usual quantization error); final
+  latents after all 10 steps 0.34% video and 0.29% audio. TAEHV can
+  also encode the image, but its latent differs from the VAE's by 12%, so prefer the VAE for encoding.
 - The VAE decodes in temporal tiles of 4 latent frames that overlap by 2, about 42 dB against an untiled
   decode. In DGL, `tiling(temporal_tiling = true, extra_args = "temporal_tile_overlap=3")` gives about 44 dB
   at twice the decode time. On CPU its 3D convolutions need spatial tiles at almost any size; pass

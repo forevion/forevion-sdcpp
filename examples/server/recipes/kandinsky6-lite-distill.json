@@ -3,7 +3,7 @@
   "id": "kandinsky6-lite-distill",
   "name": "Kandinsky 6.0 Lite Distill",
   "size_multiple": 16,
-  "description": "Text-to-video with the distilled Kandinsky 6.0 Lite checkpoint: 10 PiFlow steps without CFG. The jointly generated audio latent is not decoded yet. Use the Qwen2.5-VL 7B and CLIP-L text encoders from the same release.",
+  "description": "Text-to-video and start-image-to-video with the distilled Kandinsky 6.0 Lite checkpoint: 10 PiFlow steps without CFG. The MMAudio audio VAE decodes the soundtrack generated with the video; leave it out for silent clips. A start image is encoded with the HunyuanVideo VAE when it is set, otherwise with TAEHV. Use the Qwen2.5-VL 7B and CLIP-L text encoders from the same release.",
   "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers",
   "slots": [
     {
@@ -29,6 +29,11 @@
       "id": "tae",
       "required": false,
       "label": "TAEHV"
+    },
+    {
+      "id": "audio_vae",
+      "required": false,
+      "label": "MMAudio Audio VAE"
     }
   ],
   "required_any": [
@@ -53,6 +58,9 @@
     "width": 864,
     "height": 480
   },
+  "features": [
+    "init_image"
+  ],
   "disabled_features": [
     "img2img",
     "mask_image"
