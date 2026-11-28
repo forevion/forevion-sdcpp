@@ -244,6 +244,13 @@ The built-in list has FastWan 2.2 5B, Wan 2.2 TI2V 5B, Wan 2.2 T2V / I2V A14B, W
 VACE 1.3B / 14B and Kandinsky 6.0 Lite. The 14B models use Q4_K_M files (about 10 GB each)
 so they fit in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
 
+**LoRAs** have their own section below the models: 27 open-licence (Apache-2.0 or CC0)
+LoRAs for Wan 2.2 A14B (LightX2V 4-step and 2-step speed-ups, camera moves, effects and
+styles) and for Wan 2.2 5B / FastWan. A LoRA needs no setup: once downloaded it is
+**Ready**, and **Use** opens Create with it added to a ready variant of a model it fits,
+on the right expert for A14B high-/low-noise files. Speed-up LoRAs also need the steps
+and CFG their notes give. No Kandinsky 6 LoRAs exist yet.
+
 Downloads never create variants by themselves. Files placed by hand in the category
 folders (see [Model directories](#model-directories)) work the same way after a rescan.
 
@@ -818,6 +825,10 @@ and optional SHA-256, and optionally:
 - `convert`: files fetched to a staging folder and packed into one GGUF. `types` lists the
   output types in order of preference with an optional `min_ram_gb`; the first type the
   machine has enough RAM for is used. `{type}` in `output` is replaced by that type.
+- `lora`: marks a LoRA download (shown in the LoRAs section, ready without setup):
+  `for` names the model, `models` lists the catalog ids it fits, `strength` is the default,
+  and `both`, `high` and `low` name the file for both experts or for the Wan 2.2 A14B
+  high-/low-noise expert.
 - `guide`: the setup guide used by **Set up** on the Models page. `inputs` maps input types
   (`diffusion_model`, `t5xxl`, `llm`, `clip_l`, `vae`, `tae`, ...) to files, `alternatives`
   lists optional swaps, `settings` holds the config defaults and rules (`defaults`,

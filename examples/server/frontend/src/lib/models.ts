@@ -43,6 +43,8 @@ function packageFiles(pkg: DownloadPackage): Set<string> {
 function packageState(pkg: DownloadPackage, ready: Recipe[]): ModelState {
     if (ACTIVE.includes(pkg.status.state)) return "downloading";
     if (!pkg.installed) return pkg.missing_bytes < pkg.size || ["failed", "cancelled"].includes(pkg.status.state) ? "partial" : "not-downloaded";
+    // A LoRA needs no setup: it is picked on Create for a model it fits.
+    if (pkg.lora) return "ready";
     return ready.length ? "ready" : "needs-setup";
 }
 
