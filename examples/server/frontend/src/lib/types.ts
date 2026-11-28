@@ -129,6 +129,8 @@ export interface OutputEntry extends JobSummary {
     rendered_frames?: number | null;
     preview_url?: string;
     has_audio?: boolean;
+    // WAV of the soundtrack, played with the silent preview.
+    audio_url?: string;
     // Uploaded inputs kept in the inputs folder, as URLs by request field.
     inputs?: { init_image?: string; end_image?: string; ref_images?: string[]; ref_audios?: string[]; control_frames?: string[] };
     stage_ms?: Record<string, number>;
