@@ -6,7 +6,7 @@ import Icon from "../components/Icon.vue";
 import ModelDetail from "../components/ModelDetail.vue";
 import ModelSettings from "../components/ModelSettings.vue";
 import PresetEditor from "../components/PresetEditor.vue";
-import { busy, startDownload, stopDownload, useModel } from "../lib/modelActions";
+import { busy, startDownload, stopDownload, useLora, useModel } from "../lib/modelActions";
 import { modelCards, stateLabels } from "../lib/models";
 import type { ModelCard } from "../lib/models";
 import { eta, formatBytes, loadDownloads, state } from "../lib/store";
@@ -18,7 +18,13 @@ const addingOwn = ref(false);
 const settingUp = ref("");
 
 const selected = computed(() => modelCards.value.find((c) => c.key === selectedKey.value) || null);
-const packageCards = computed(() => modelCards.value.filter((c) => c.kind === "package"));
+const packageCards = computed(() => modelCards.value.filter((c) => c.kind === "package" && !c.pkg?.lora));
+const loraCards = computed(() => modelCards.value.filter((c) => c.pkg?.lora));
+const loraMessage = ref("");
+
+async function useLoraCard(card: ModelCard) {
+    loraMessage.value = await useLora(card);
+}
 const ownCards = computed(() => modelCards.value.filter((c) => c.kind === "own"));
 
 function progress(card: ModelCard) {
@@ -138,6 +144,65 @@ onMounted(loadDownloads);
                     <span class="faint small">From files you have or download links</span>
                 </button>
             </div>
+            <section v-if="loraCards.length" class="lora-section">
+                <h2>LoRAs</h2>
+                <p class="muted">Small add-ons that change a model's style or motion, or make it faster. Download one, then Use adds it on Create for a model it fits.</p>
+                <p v-if="loraMessage" class="status-message status-message--error">{{ loraMessage }}</p>
+                <div class="cards">
+                <article
+                    v-for="card in loraCards"
+                    :key="card.key"
+                    class="card panel clickable"
+                    :class="card.state"
+                    tabindex="0"
+                    @click="selectedKey = card.key"
+                    @keydown.enter="selectedKey = card.key"
+                >
+                    <div class="card-head">
+                        <h3>{{ card.name }}</h3>
+                        <span class="status" :class="card.state">{{ stateLabels[card.state] }}</span>
+                    </div>
+                    <p class="desc">{{ card.description }}</p>
+                    <div class="badges">
+                        <span v-for="badge in badges(card)" :key="badge" class="badge">{{ badge }}</span>
+                    </div>
+                    <p class="meta faint">For {{ card.pkg?.lora?.for }} · {{ summary(card) }}<template v-if="card.kind === 'own'"> · your model</template></p>
+
+                    <div v-if="card.state === 'downloading' && card.pkg" class="dl">
+                        <div class="progress" :class="{ 'progress--indeterminate': ['packing', 'verifying', 'queued', 'starting'].includes(card.pkg.status.state) }">
+                            <div :style="{ width: `${progress(card) * 100}%` }" />
+                        </div>
+                        <p class="faint small">
+                            {{ stageText[card.pkg.status.state] || card.pkg.status.state }}
+                            <template v-if="card.pkg.status.state === 'downloading'">
+                                · {{ formatBytes(card.pkg.status.done_bytes) }} / {{ formatBytes(card.pkg.status.total_bytes) }} · {{ eta(downloadSeconds(card)) }}
+                            </template>
+                        </p>
+                    </div>
+                    <p v-if="card.pkg?.status.state === 'failed'" class="status-message status-message--error small">{{ card.pkg.status.error }}</p>
+
+                    <div class="actions" @click.stop>
+                        <button v-if="card.state === 'downloading'" class="btn-secondary" type="button" :disabled="busy[`stop:${card.pkg!.id}`]" @click="stopDownload(card.pkg!)">
+                            <span v-if="busy[`stop:${card.pkg!.id}`]" class="spin" /><Icon v-else name="stop" :size="16" />Stop
+                        </button>
+                        <button
+                            v-else-if="card.state === 'not-downloaded' || card.state === 'partial'"
+                            class="btn"
+                            type="button"
+                            :disabled="busy[`download:${card.pkg!.id}`]"
+                            @click="startDownload(card.pkg!)"
+                        >
+                            <span v-if="busy[`download:${card.pkg!.id}`]" class="spin" /><Icon v-else name="download" :size="16" />
+                            {{ card.state === "partial" ? "Resume" : "Download" }} {{ formatBytes(card.pkg!.missing_bytes) }}
+                        </button>
+                        <button v-else-if="card.state === 'needs-setup'" class="btn" type="button" @click="settingUp = card.pkg!.id"><Icon name="settings" :size="16" />Set up</button>
+                        <button v-else-if="card.state === 'ready'" class="btn" type="button" @click="useLoraCard(card)"><Icon name="play" :size="16" />Use</button>
+                        <button v-else class="btn-secondary" type="button" @click="selectedKey = card.key">Fix files</button>
+                        <button class="btn-ghost" type="button" @click="selectedKey = card.key">Details<Icon name="chevron" :size="14" /></button>
+                    </div>
+                </article>
+                </div>
+            </section>
         </template>
 
         <ModelSettings v-if="settingsOpen" @close="settingsOpen = false" />
@@ -285,6 +350,21 @@ onMounted(loadDownloads);
     background: transparent;
     color: var(--text-2);
     cursor: pointer;
+}
+
+.lora-section {
+    display: grid;
+    gap: 10px;
+    margin-top: 10px;
+}
+
+.lora-section h2 {
+    margin: 0;
+    font-size: 18px;
+}
+
+.lora-section p {
+    margin: 0;
 }
 
 .add-own:hover {
