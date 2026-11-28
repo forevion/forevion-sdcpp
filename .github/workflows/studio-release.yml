@@ -98,7 +98,7 @@ jobs:
           version: 10.15.1
 
       - name: Compiler cache
-        uses: actions/cache@v4
+        uses: actions/cache@v6
         with:
           path: .ccache
           key: cuda-ccache-${{ github.run_id }}
@@ -220,7 +220,7 @@ jobs:
           cat SHA256SUMS.txt
           echo "tag=studio-$(date -u +%Y%m%d)-${GITHUB_SHA:0:7}" >> "$GITHUB_OUTPUT"
 
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ steps.meta.outputs.tag }}
           target_commitish: ${{ github.sha }}
