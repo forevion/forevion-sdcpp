@@ -138,6 +138,8 @@ async function add() {
     gap: 16px;
     width: min(620px, 100%);
     padding: 20px;
+    max-height: calc(100dvh - 40px);
+    overflow-y: auto;
 }
 
 .head {

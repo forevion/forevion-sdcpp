@@ -47,6 +47,8 @@ std::string mime_for_extension(const std::string& extension) {
         return "video/webm";
     if (extension == ".avi")
         return "video/x-msvideo";
+    if (extension == ".wav")
+        return "audio/wav";
     return "application/octet-stream";
 }
 
@@ -85,6 +87,43 @@ bool write_file(const fs::path& path, const std::string& bytes) {
     std::error_code error;
     fs::rename(partial, path, error);
     return !error;
+}
+
+// Extension for an uploaded data URL or bare Base64 payload, from its MIME type or first bytes.
+std::string input_extension(const std::string& mime, const std::string& bytes) {
+    if (mime == "image/jpeg" || (bytes.size() > 2 && static_cast<unsigned char>(bytes[0]) == 0xFF && static_cast<unsigned char>(bytes[1]) == 0xD8))
+        return ".jpg";
+    if (mime == "image/webp" || (bytes.size() > 12 && bytes.compare(8, 4, "WEBP") == 0))
+        return ".webp";
+    if (mime.rfind("audio/", 0) == 0 || bytes.rfind("RIFF", 0) == 0)
+        return ".wav";
+    return ".png";
+}
+
+// Saves one uploaded input under a name made from its content, so the same picture is kept once.
+std::string save_input(const fs::path& dir, const std::string& value) {
+    std::string mime;
+    std::string payload = value;
+    if (value.rfind("data:", 0) == 0) {
+        const size_t comma = value.find(',');
+        if (comma == std::string::npos)
+            return "";
+        mime    = value.substr(5, value.find(';') < comma ? value.find(';') - 5 : comma - 5);
+        payload = value.substr(comma + 1);
+    }
+    std::string bytes;
+    if (!decode_base64(payload, bytes) || bytes.empty())
+        return "";
+    uint64_t hash = 1469598103934665603ULL;
+    for (unsigned char c : bytes)
+        hash = (hash ^ c) * 1099511628211ULL;
+    char name[40];
+    snprintf(name, sizeof(name), "input-%016llx", static_cast<unsigned long long>(hash));
+    const std::string file = name + input_extension(mime, bytes);
+    std::error_code error;
+    if (!fs::exists(dir / file, error) && !write_file(dir / file, bytes))
+        return "";
+    return file;
 }
 
 template <typename T>
@@ -146,6 +185,37 @@ json make_job_summary(const AsyncGenerationJob& job, const json& body) {
         summary["recipe"] = "@current";
     }
     return summary;
+}
+
+json save_job_inputs(const ServerRuntime& runtime, const json& body) {
+    json saved = json::object();
+    if (runtime.svr_params->input_dir.empty() || !body.is_object())
+        return saved;
+    const fs::path dir = fs::u8path(runtime.svr_params->input_dir);
+    std::error_code error;
+    fs::create_directories(dir, error);
+    auto url = [](const std::string& file) { return "/sdcpp/v1/inputs/files/" + file; };
+    for (const char* key : {"init_image", "end_image"}) {
+        const auto it = body.find(key);
+        if (it != body.end() && it->is_string())
+            if (const auto file = save_input(dir, it->get<std::string>()); !file.empty())
+                saved[key] = url(file);
+    }
+    for (const char* key : {"ref_images", "ref_audios", "control_frames"}) {
+        const auto it = body.find(key);
+        if (it == body.end() || !it->is_array())
+            continue;
+        json files = json::array();
+        for (const auto& item : *it)
+            if (item.is_string())
+                if (const auto file = save_input(dir, item.get<std::string>()); !file.empty())
+                    files.push_back(url(file));
+        if (!files.empty())
+            saved[key] = files;
+    }
+    if (!saved.empty())
+        LOG_INFO("saved %zu uploaded input(s) in %s", saved.size(), dir.u8string().c_str());
+    return saved;
 }
 
 void save_job_outputs(const ServerRuntime& runtime, const AsyncGenerationJob& job) {
@@ -285,6 +355,20 @@ void register_library_endpoints(httplib::Server& svr, ServerRuntime& runtime) {
         if (rt->svr_params->output_dir.empty() || !valid_output_name(name) || !file) {
             res.status = 404;
             res.set_content(R"({"error":"output not found"})", "application/json");
+            return;
+        }
+        std::ostringstream bytes;
+        bytes << file.rdbuf();
+        res.set_header("Cache-Control", "private, max-age=31536000, immutable");
+        res.set_content(bytes.str(), mime_for_extension(path.extension().string()));
+    });
+
+    svr.Get(R"(/sdcpp/v1/inputs/files/(input-[0-9a-f]+\.[a-z]+))", [rt](const httplib::Request& req, httplib::Response& res) {
+        const fs::path path = fs::u8path(rt->svr_params->input_dir) / std::string(req.matches[1]);
+        std::ifstream file(path, std::ios::binary);
+        if (rt->svr_params->input_dir.empty() || !file) {
+            res.status = 404;
+            res.set_content(R"({"error":"input not found"})", "application/json");
             return;
         }
         std::ostringstream bytes;

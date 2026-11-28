@@ -347,8 +347,13 @@ public:
     json refresh_online_catalog() {
         const std::string url = runtime_->svr_params->catalog_url;
         json status           = {{"url", url}};
+        const SDSvrParams& params = *runtime_->svr_params;
         if (url.empty()) {
             status["state"] = "disabled";
+        } else if (!params.settings_file.empty() && !params.folders_configured) {
+            // The models folder is not chosen yet; do not create a default one next to the app.
+            status["state"] = "waiting";
+            status["error"] = "choose the models folder first";
         } else if (!valid_download_url(url)) {
             status["state"] = "error";
             status["error"] = "invalid --catalog-url";

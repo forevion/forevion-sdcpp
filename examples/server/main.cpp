@@ -18,6 +18,7 @@
 #include "model_catalog.h"
 #include "routes.h"
 #include "runtime.h"
+#include "studio_settings.h"
 
 #ifdef HAVE_INDEX_HTML
 #include "frontend/dist/gen_index_html.h"
@@ -166,6 +167,7 @@ int main(int argc, const char** argv) {
     register_library_endpoints(svr, runtime);
     register_download_endpoints(svr, runtime);
     register_model_manager_endpoints(svr, runtime);
+    register_studio_settings_endpoints(svr, runtime);
 
     // Failed API requests show up in the terminal with the error the client received.
     svr.set_logger([](const httplib::Request& req, const httplib::Response& res) {

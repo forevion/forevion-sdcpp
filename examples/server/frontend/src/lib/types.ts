@@ -113,6 +113,8 @@ export interface OutputEntry extends JobSummary {
     rendered_frames?: number | null;
     preview_url?: string;
     has_audio?: boolean;
+    // Uploaded inputs kept in the inputs folder, as URLs by request field.
+    inputs?: { init_image?: string; end_image?: string; ref_images?: string[]; ref_audios?: string[]; control_frames?: string[] };
     stage_ms?: Record<string, number>;
     generation_info?: unknown;
 }
@@ -267,4 +269,23 @@ export interface DglJob {
     queue_position: number;
     result: { type: string; outputs: DglOutput[]; media: DglMedia[] } | null;
     error: { code: string; message: string } | null;
+}
+
+export type FolderKey = "models" | "inputs" | "outputs";
+
+export interface FolderSettings {
+    settings_file: string;
+    can_save: boolean;
+    needs_setup: boolean;
+    can_browse: boolean;
+    folders: Record<FolderKey, { path: string; exists: boolean }>;
+    suggested: Record<FolderKey, string>;
+}
+
+export interface FolderListing {
+    path: string;
+    parent: string;
+    dirs: { name: string; path: string }[];
+    roots: { name: string; path: string }[];
+    warning: string;
 }

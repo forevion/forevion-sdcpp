@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AddModelDialog from "./AddModelDialog.vue";
+import FolderSetup from "./FolderSetup.vue";
 import Icon from "./Icon.vue";
 import InstalledFiles from "./InstalledFiles.vue";
 import PackageEditor from "./PackageEditor.vue";
@@ -11,8 +12,8 @@ import { loadCatalog, loadDownloads, startPolling, state } from "../lib/store";
 
 const emit = defineEmits<{ (e: "close"): void }>();
 
-type Section = "storage" | "backup" | "catalog";
-const section = ref<Section>("storage");
+type Section = "folders" | "storage" | "backup" | "catalog";
+const section = ref<Section>("folders");
 const busy = ref("");
 const message = ref("");
 const error = ref("");
@@ -41,6 +42,46 @@ async function work(key: string, action: () => Promise<void>) {
         busy.value = "";
     }
 }
+
+// Where the online model list comes from. "develop" has catalog edits before they are released.
+const CATALOG_BASE = "https://raw.githubusercontent.com/forevion/forevion-sdcpp";
+const catalogChoices = [
+    { id: "master", label: "Released (master)", url: `${CATALOG_BASE}/master/examples/server/downloads.json` },
+    { id: "develop", label: "Latest (develop)", url: `${CATALOG_BASE}/develop/examples/server/downloads.json` },
+    { id: "custom", label: "Other address", url: "" },
+    { id: "none", label: "Off (built-in list only)", url: "" },
+];
+const catalogUrl = ref("");
+const catalogChoice = ref("master");
+const customUrl = ref("");
+const canSaveCatalog = ref(false);
+
+async function loadCatalogSource() {
+    try {
+        const source = await api.catalogSource();
+        catalogUrl.value = source.url;
+        canSaveCatalog.value = source.can_save;
+        const known = catalogChoices.find((c) => c.url && c.url === source.url);
+        catalogChoice.value = known ? known.id : source.url ? "custom" : "none";
+        customUrl.value = known ? "" : source.url;
+    } catch {
+        canSaveCatalog.value = false;
+    }
+}
+
+const chosenCatalogUrl = computed(() =>
+    catalogChoice.value === "custom" ? customUrl.value.trim() : catalogChoices.find((c) => c.id === catalogChoice.value)?.url || "",
+);
+
+const saveCatalogSource = () => work("source", async () => {
+    await api.saveCatalogSource(chosenCatalogUrl.value);
+    catalogUrl.value = chosenCatalogUrl.value;
+    if (catalogUrl.value) await api.refreshCatalog();
+    await loadDownloads();
+    message.value = catalogUrl.value ? "Model list source saved and refreshed." : "Online model list turned off.";
+});
+
+onMounted(loadCatalogSource);
 
 const refreshCatalog = () => work("catalog", async () => {
     await api.refreshCatalog();
@@ -121,6 +162,7 @@ async function restore(event: Event) {
                 <button class="btn-ghost icon-btn" type="button" aria-label="Close" @click="emit('close')"><Icon name="close" /></button>
             </header>
             <nav class="segmented tabs" role="tablist">
+                <button type="button" role="tab" :aria-pressed="section === 'folders'" @click="section = 'folders'">Folders</button>
                 <button type="button" role="tab" :aria-pressed="section === 'storage'" @click="section = 'storage'">Storage</button>
                 <button type="button" role="tab" :aria-pressed="section === 'backup'" @click="section = 'backup'">Backup and restore</button>
                 <button type="button" role="tab" :aria-pressed="section === 'catalog'" @click="section = 'catalog'">Model list</button>
@@ -129,7 +171,8 @@ async function restore(event: Event) {
             <p v-if="error" class="status-message status-message--error">{{ error }}</p>
 
             <div class="body">
-                <InstalledFiles v-if="section === 'storage'" />
+                <FolderSetup v-if="section === 'folders'" />
+                <InstalledFiles v-else-if="section === 'storage'" />
 
                 <div v-else-if="section === 'backup'" class="block">
                     <p class="muted">Save all your variants and added or edited models in one file, or load them back on this or another computer. Model files are not included.</p>
@@ -146,6 +189,28 @@ async function restore(event: Event) {
 
                 <div v-else class="block">
                     <p class="muted">{{ catalogText }}</p>
+                    <div class="source">
+                        <label class="field">
+                            <span>Where the model list comes from</span>
+                            <select v-model="catalogChoice" class="input" :disabled="!canSaveCatalog">
+                                <option v-for="choice in catalogChoices" :key="choice.id" :value="choice.id">{{ choice.label }}</option>
+                            </select>
+                        </label>
+                        <input v-if="catalogChoice === 'custom'" v-model="customUrl" class="input mono" placeholder="https://…/downloads.json" :disabled="!canSaveCatalog" />
+                        <button
+                            v-if="canSaveCatalog"
+                            class="btn-secondary"
+                            type="button"
+                            :disabled="!!busy || chosenCatalogUrl === catalogUrl || (catalogChoice === 'custom' && !customUrl.trim())"
+                            @click="saveCatalogSource"
+                        >
+                            <span v-if="busy === 'source'" class="spin" /><Icon v-else name="check" :size="16" />Use this list
+                        </button>
+                    </div>
+                    <p class="faint small">
+                        Model entries are plain data: an edit to <code>downloads.json</code> on GitHub shows up here after <strong>Refresh model list</strong>, with no rebuild or
+                        restart. Pick <strong>Latest (develop)</strong> to get edits before they are released.
+                    </p>
                     <div class="row">
                         <button class="btn-secondary" type="button" :disabled="!!busy" @click="refreshCatalog">
                             <span v-if="busy === 'catalog'" class="spin" /><Icon v-else name="refresh" :size="16" />Refresh model list
@@ -170,6 +235,11 @@ async function restore(event: Event) {
 </template>
 
 <style scoped>
+.source {
+    display: grid;
+    gap: 8px;
+}
+
 .overlay {
     position: fixed;
     inset: 0;
@@ -187,6 +257,7 @@ async function restore(event: Event) {
     width: min(980px, 100%);
     height: min(780px, 100%);
     padding: 20px;
+    max-height: calc(100dvh - 40px);
 }
 
 .head {
