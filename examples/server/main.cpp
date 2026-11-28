@@ -12,9 +12,14 @@
 #include "async_jobs.h"
 #include "common/common.h"
 #include "common/resource_owners.hpp"
+#include "device_info.h"
+#include "downloads.h"
+#include "library.h"
+#include "model_manager.h"
 #include "model_catalog.h"
 #include "routes.h"
 #include "runtime.h"
+#include "studio_settings.h"
 
 #ifdef HAVE_INDEX_HTML
 #include "frontend/dist/gen_index_html.h"
@@ -67,6 +72,7 @@ static void parse_args(int argc,
 
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
     SDSvrParams* svr_params = (SDSvrParams*)data;
+    observe_sd_log(log);
     log_print(level, log, svr_params->log_level, svr_params->color);
 }
 
@@ -160,9 +166,23 @@ int main(int argc, const char** argv) {
     register_sdcpp_api_endpoints(svr, runtime);
     register_dgl_endpoints(svr, runtime);
     register_model_endpoints(svr, runtime);
+    register_library_endpoints(svr, runtime);
+    register_download_endpoints(svr, runtime);
+    register_model_manager_endpoints(svr, runtime);
+    register_studio_settings_endpoints(svr, runtime);
+    register_device_endpoints(svr, runtime);
+
+    // Failed API requests show up in the terminal with the error the client received.
+    svr.set_logger([](const httplib::Request& req, const httplib::Response& res) {
+        if (res.status < 400 || req.path == "/favicon.ico")
+            return;
+        std::string body = res.body.size() > 300 ? res.body.substr(0, 300) + "..." : res.body;
+        LOG_WARN("%s %s -> HTTP %d %s", req.method.c_str(), req.path.c_str(), res.status, body.c_str());
+    });
 
     LOG_INFO("listening on: http://%s:%d\n", svr_params.listen_ip.c_str(), svr_params.listen_port);
     svr.listen(svr_params.listen_ip, svr_params.listen_port);
+    stop_downloads();
 
     {
         std::lock_guard<std::mutex> lock(async_job_manager.mutex);

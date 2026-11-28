@@ -289,6 +289,27 @@ struct LCMScheduler : SigmaScheduler {
     }
 };
 
+// Distilled PiFlow schedule (Kandinsky 6 PiflowScheduler): raw times walk down from 1 in
+// segments of 1 / (n - 1 + final_scale), the last one final_scale times as long, and are
+// mapped through the model's flow shift.
+struct PiFlowScheduler : SigmaScheduler {
+    std::vector<float> get_sigmas(uint32_t n, float sigma_min, float sigma_max, t_to_sigma_t t_to_sigma) override {
+        constexpr float final_scale = 0.5f;
+        constexpr float eps         = 1e-6f;
+        std::vector<float> result;
+        result.reserve(n + 1);
+        const float segment = n > 0 ? 1.f / (static_cast<float>(n) - (1.f - final_scale)) : 0.f;
+        float raw           = 1.f;
+        for (uint32_t i = 0; i < n; i++) {
+            // t_to_sigma takes a discrete timestep index (t + 1 is the continuous time * TIMESTEPS).
+            result.push_back(t_to_sigma(raw * TIMESTEPS - 1.f));
+            raw = std::max(raw - (i + 1 < n ? segment : segment * final_scale), eps);
+        }
+        result.push_back(0.0f);
+        return result;
+    }
+};
+
 struct KarrasScheduler : SigmaScheduler {
     std::vector<float> get_sigmas(uint32_t n, float sigma_min, float sigma_max, t_to_sigma_t t_to_sigma) override {
         // These *COULD* be function arguments here,
@@ -1175,6 +1196,10 @@ struct Denoiser {
             case LCM_SCHEDULER:
                 LOG_INFO("get_sigmas with LCM scheduler");
                 scheduler = std::make_shared<LCMScheduler>();
+                break;
+            case PIFLOW_SCHEDULER:
+                LOG_INFO("get_sigmas with PiFlow scheduler");
+                scheduler = std::make_shared<PiFlowScheduler>();
                 break;
             case LTX2_SCHEDULER:
                 LOG_INFO("get_sigmas with LTX2 scheduler");

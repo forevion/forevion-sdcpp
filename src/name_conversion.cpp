@@ -1356,7 +1356,8 @@ std::string convert_diffusers_to_original_wan_vae(std::string name, bool qwen_im
 }
 
 std::string convert_first_stage_model_name(std::string name, std::string prefix, SDVersion version) {
-    if (sd_version_is_hunyuan_video(version) || sd_version_is_mage_flow(version) || sd_version_is_minimax_h3(version) || version == VERSION_SEEDVR2) {
+    if (sd_version_is_hunyuan_video(version) || sd_version_is_mage_flow(version) || sd_version_is_minimax_h3(version) || version == VERSION_SEEDVR2 ||
+        sd_version_is_kandinsky6(version)) {
         return name;
     }
     if (sd_version_uses_wan_vae(version)) {
@@ -1830,6 +1831,15 @@ std::string convert_tensor_name(std::string name, SDVersion version) {
     }
 
     replace_with_prefix_map(name, prefix_map);
+    // Diffusers pipelines (e.g. Kandinsky 6) save CLIPTextModel without the text_model wrapper.
+    for (const char* clip_prefix : {"text_encoders.clip_l.transformer.", "text_encoders.clip_g.transformer."}) {
+        if (starts_with(name, clip_prefix)) {
+            const std::string rest = name.substr(strlen(clip_prefix));
+            if (starts_with(rest, "embeddings.") || starts_with(rest, "encoder.") || starts_with(rest, "final_layer_norm.")) {
+                name = std::string(clip_prefix) + "text_model." + rest;
+            }
+        }
+    }
     name = convert_connector_name(std::move(name), version);
 
     if (sd_version_is_ltxav(version)) {

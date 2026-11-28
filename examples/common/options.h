@@ -164,6 +164,7 @@ namespace example_options {
         "flux",
         "beta",
         "llada_image",
+        "piflow",
     };
 
     inline constexpr const char* preview_modes[] = {

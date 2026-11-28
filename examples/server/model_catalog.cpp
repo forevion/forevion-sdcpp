@@ -553,6 +553,35 @@ static json normalize_recipe(json recipe) {
     return recipe;
 }
 
+std::set<std::string> model_categories() {
+    std::set<std::string> categories = {"loras"};
+    for (const auto& slot : k_model_slots)
+        categories.insert(slot.categories.begin(), slot.categories.end());
+    return categories;
+}
+
+json model_slot_definitions() {
+    json slots = json::array();
+    for (const auto& slot : k_model_slots)
+        slots.push_back({{"id", slot.id}, {"label", slot.label}, {"categories", slot.categories}});
+    return slots;
+}
+
+json prepare_user_recipe(json recipe) {
+    if (!recipe.is_object())
+        throw std::runtime_error("recipe must be a JSON object");
+    for (const char* key : {"source", "file", "root", "effective_features"})
+        recipe.erase(key);
+    if (recipe.contains("slots") && recipe["slots"].is_array())
+        for (auto& slot : recipe["slots"])
+            if (slot.is_object()) {
+                slot.erase("categories");
+                slot.erase("category");
+            }
+    normalize_recipe(recipe);
+    return recipe;
+}
+
 static bool supported_model_file(const fs::path& path, const std::string& category) {
     std::string ext = path.extension().u8string();
     std::transform(ext.begin(), ext.end(), ext.begin(), [](unsigned char c) { return std::tolower(c); });

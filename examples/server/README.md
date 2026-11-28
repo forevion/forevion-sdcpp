@@ -4,7 +4,7 @@
 and HTTP APIs. Download or build the server before starting; see the
 [build guide](../../docs/build.md) and [frontend build instructions](#build-with-frontend).
 
-- [Web UI](#web-ui): start the server, select a model, and generate.
+- [Web UI](#web-ui): ready-built packages, one-script Linux setup, starting the server, getting models, and generating.
 - [Model management](#model-management): model directories, recipes, and startup models.
 - [Server configuration](#server-configuration): launcher settings, network, logging, and help.
 - [API](#api): native and compatibility endpoints.
@@ -22,10 +22,130 @@ server-local defaults.
 
 ## Web UI
 
+### Ready-built packages
+
+Running the **Studio release** workflow by hand (Actions tab, pick `master`) publishes a
+`studio-<date>-<commit>` release on the
+[releases page](https://github.com/forevion/forevion-sdcpp/releases) with builds that
+include the Web UI. Each package runs on any x86-64 CPU and picks the fastest code path
+(AVX2, AVX-512, ...) when it starts; the CUDA package also uses an NVIDIA GPU:
+
+| Package | Runs on | Start |
+| --- | --- | --- |
+| `sdcpp-studio-windows-x64.zip` | Windows 10/11 | Unzip, double-click `start-studio.bat` |
+| `sdcpp-studio-linux-x64.tar.gz` | glibc 2.35+ (Ubuntu 22.04+, Zorin OS 17+, Debian 12+) | `./setup-sdcpp.sh` (also inside the archive) |
+| `sdcpp-studio-linux-x64-cuda.tar.gz` | The same Linux systems with an NVIDIA GPU from Turing (T4, RTX 20) to Blackwell (RTX 50, RTX PRO 6000) and NVIDIA driver 575+ | `./setup-sdcpp.sh` picks it when `nvidia-smi` finds a GPU |
+
+The CUDA package bundles the CUDA 12.8 runtime and cuBLAS, so only the NVIDIA driver is
+needed. A workflow run with **Publish** turned off only builds the packages and keeps
+them as workflow artifacts.
+
+`SHA256SUMS.txt` in each release lists the checksums.
+
+### Quick start on Linux
+
+On Debian/Ubuntu-based systems (for example Zorin OS), one script installs and starts
+everything. Put it in an empty folder and run it:
+
+```sh
+mkdir -p ~/sdcpp && cd ~/sdcpp
+curl -fLO https://raw.githubusercontent.com/forevion/forevion-sdcpp/develop/scripts/setup-sdcpp.sh
+chmod +x setup-sdcpp.sh
+./setup-sdcpp.sh
+```
+
+The first run downloads the latest release, checks its SHA-256, unpacks it into `app/`,
+installs the OpenMP runtime with apt if the system lacks it, starts the server and opens
+the browser. Later runs start it straight away; `--update` installs a newer release when
+there is one.
+
+```mermaid
+flowchart TD
+    A["./setup-sdcpp.sh"] --> B{"Package installed?<br/>or --update"}
+    B -- no / update --> C["Download latest release<br/>check SHA-256, unpack to app/"]
+    B -- yes --> D{"Server already running?"}
+    C --> D
+    D -- yes --> E["Open the browser"]
+    D -- no --> F["Start sd-server<br/>browser opens when ready"]
+```
+
+The installed release (`sd-server`, `sd-cli`, libraries) goes to `app/` next to the
+script, and `studio-settings.json` there remembers the models, inputs and outputs folders
+you choose in the browser on the first start.
+
+**NVIDIA GPU.** `--gpu auto` (the default) uses CUDA when `nvidia-smi` finds an NVIDIA
+GPU: it installs the CUDA package instead of the CPU one and starts the server with
+automatic placement, so weights go to the GPU's memory first and spill into RAM when they
+do not fit. `--gpu cpu` forces the CPU build and `--gpu cuda` insists on the GPU. With
+`--from-source`, a CUDA build needs the CUDA toolkit 12.x (`nvcc`) and compiles for the
+installed GPU only, which takes 15-40 minutes the first time.
+
+Options: `--update` installs the latest release, `--setup-only` installs without
+starting, `--port N` changes the port, `--lan` lets other devices on the network connect,
+`--threads N` overrides the thread count, `--gpu auto|cuda|cpu` chooses the build and
+`--no-browser` skips opening the browser. Run with `--help` for the full list.
+
+**On a rented cloud GPU.** Pick a Linux (Ubuntu 22.04 or newer) machine with an NVIDIA
+GPU and its driver; most GPU images already have it (`nvidia-smi` shows the GPU). Run the
+script there with `--no-browser`, then reach the Web UI through an SSH tunnel from your own
+computer, so the server is never exposed to the internet:
+
+```sh
+ssh -L 1234:127.0.0.1:1234 user@gpu-machine
+```
+
+Then open <http://127.0.0.1:1234> on your computer. The badge at the bottom of the
+sidebar shows **GPU** (green) when the model runs on the GPU, **GPU** in amber when part
+of it had to stay in RAM, and **CPU** otherwise; hover it for the devices and their
+memory. A CUDA build that finds no GPU shows **No GPU** and a warning on Create. The Queue
+and the Gallery show which device each job ran on. Through the tunnel the folder
+browser shows the cloud machine's folders. Rough GPU memory needs: Wan 5B and the 14B
+Q4_K_M models fit in 24 GB; Wan 2.2 A14B (two experts) and Kandinsky 6 Pro work best with
+48 GB or more. Do not use `--lan` on a public machine: the server has no login.
+
+Cloud GPU containers (RunPod, Vast.ai, ...) usually log you in as `root` without `sudo`;
+the script then installs missing packages with `apt-get` directly.
+
+**RunPod, step by step.** Only the volume survives when a pod is removed, so keep
+everything on it:
+
+1. Create a **network volume** (150 GB is enough for several models; billed per GB-month
+   whether or not a pod runs) in the region where you want GPUs.
+2. Deploy a pod on it with an Ubuntu 22.04+ image that has CUDA 12.8 or newer (for example
+   RunPod's PyTorch template), the volume mounted at `/workspace`, and **SSH over exposed
+   TCP** turned on (the simpler proxied SSH cannot forward ports).
+3. In the pod's terminal:
+
+   ```sh
+   mkdir -p /workspace/sdcpp && cd /workspace/sdcpp
+   curl -fLO https://raw.githubusercontent.com/forevion/forevion-sdcpp/develop/scripts/setup-sdcpp.sh
+   chmod +x setup-sdcpp.sh
+   ./setup-sdcpp.sh --no-browser
+   ```
+
+4. On your computer, open the tunnel with the SSH command RunPod shows for the exposed TCP
+   port, adding `-L 1234:127.0.0.1:1234`, and open <http://127.0.0.1:1234>.
+5. On the first start choose `/workspace/models`, `/workspace/inputs` and
+   `/workspace/outputs` as the folders.
+
+Next time, deploy a pod on the same volume and run `/workspace/sdcpp/setup-sdcpp.sh
+--no-browser` again: the app, the folders setting and the models are already there.
+Terminate the pod when you are done; a stopped pod keeps charging for its own disk.
+
+**Building from source.** `--from-source` clones the `develop` branch into
+`stable-diffusion.cpp/` and builds it for this exact CPU instead: it installs Git, CMake,
+Ninja and the compiler with apt, downloads Node.js and pnpm into `tools/` for the Web UI,
+and caps parallel compile jobs at one per 2 GB of free RAM. The build goes to `build/`
+and takes several minutes the first time; later runs rebuild only when the source
+changed (`--update` pulls first, `--rebuild` forces it). The script also builds from
+source on non-x86 machines, when no release exists yet, and when it is run from inside a
+checkout (`scripts/setup-sdcpp.sh`, building into `build-linux/` and using the checkout's
+`models/` and `output/`).
+
 ### Start the server
 
 From the repository root, start the launcher. It finds the server executable
-and uses the repository's `models/` directory:
+and starts it with `--settings-file studio-settings.json` next to the launcher:
 
 **Windows (PowerShell)**
 
@@ -42,12 +162,17 @@ server. Keep the console window open while using the Web UI.
 sh ./start-server.sh
 ```
 
+On a Linux desktop you can also double-click `start-server.sh` (choose **Run** if the
+file manager asks). When it is not started from a terminal, it opens one
+(GNOME Terminal, Konsole, xfce4-terminal, xterm and others) so the log stays visible,
+and keeps the window open after the server stops.
+
 To start the executable directly instead, run from the build directory:
 
 **Windows (PowerShell)**
 
 ```powershell
-.\bin\Release\sd-server.exe --model-dir ..\models
+.in\Release\sd-server.exe --model-dir ..\models
 ```
 
 **Linux/macOS**
@@ -61,87 +186,133 @@ for another build configuration or an extracted release archive. Open
 <http://127.0.0.1:1234/> after the server starts, and keep the server running
 while using the browser.
 
-### Select a model
+### Choose your folders
 
-1. Download the weights and required components listed in the matching
-   [model guide](../../docs/models/README.md). Put them in the category folders
-   under `models/`, such as `checkpoints/`, `diffusion_models/`, `text_encoders/`,
-   `tokenizers/`, and `vae/`. See [Model directories](#model-directories) below.
-2. Click **Model** below the prompt to open model selection.
-3. Choose the matching **Recipe**. Keep **Apply recipe defaults** enabled to
-   start with that recipe's generation settings.
-4. Select each component in its named field: for example, **Diffusion model**,
-   the model-specific text encoder field, and **VAE**. Required fields have an
-   asterisk. A VAE/TAE requirement needs one compatible decoder. Match all files
-   to the chosen checkpoint and variant, as described in its model guide.
-5. If a file is missing from a dropdown, check its category folder and click
-   **Refresh files & recipes**. Selectors support searching by name or path.
+On the first start the browser shows **Welcome to Forevion Studio** and asks for three
+folders before anything else:
 
-Recipe and component selectors support searching by name or relative file ID.
-Use the arrow keys and Enter to select, or Escape to cancel a search. With
-**Apply recipe defaults** enabled, selecting a recipe immediately applies its
-declared generation defaults while preserving prompts, input images and fields
-not specified by the recipe. Disable it to keep your current parameters when
-switching recipes. This preference defaults to enabled and is saved locally.
-Recipes declaring `video_frames` also switch the form to Video Generation;
-other recipes switch to Image Generation. Select the required components to
-enable **Generate**. The job loads any needed components and reports the
-loading progress alongside sampling and output encoding.
+- **Models**: model files. Pick the folder that already holds your models to use them;
+  downloads go into `diffusion_models/`, `text_encoders/`, `vae/`, ... inside it.
+- **Inputs**: start images, reference images, audio and control videos you add on Create.
+- **Outputs**: finished images and videos (the Gallery).
 
-### Generate an image or video
+Type a full path or click **Browse…** to pick a folder (with **Create folder**); missing
+folders are created. The choice is saved in `studio-settings.json` next to the launcher
+and applied at once, without a restart. Nothing is created next to the app until the
+folders are chosen. Change them later in **Models → Settings → Folders**. The screen
+appears again if a saved folder no longer exists. Browsing only works in a browser on the
+computer that runs the server; from another device, type the paths.
 
-1. Enter a prompt, for example `a lovely cat` for an image model.
-2. Open **Sample & Guidance** to set **Method**, **Scheduler**, **Steps**, and
-   **CFG Scale** when the model guide specifies values different from the recipe
-   defaults. Set the output dimensions in **Aspect Ratio & Resolution**.
-3. Supply inputs for the chosen task. Editing recipes use **Reference Images**;
-   IP-Adapter uses **IP-Adapter Image**. For image-to-video, use video generation
-   and upload a **Start Frame**; add an **End Frame** only for a compatible
-   first/last-frame workflow. Set the video length and FPS as required by the model.
-4. Click **Generate**. Wait for denoising, decoding, and output encoding to
-   finish, then preview or save the result. Sampling reaching 100% does not mean
-   decoding has finished.
+### Get models
 
-The generation status bar shows the current stage and elapsed time even when
-Preview Mode is `none`. During sampling it shows completed steps for the current
-pass; prompt encoding and VAE decoding show an activity indicator when their
-total work is unknown. The canvas keeps the submitted output aspect ratio, and
-stage changes keep the same layout. Editing the next request's resolution does
-not resize the current preview or result.
+**Models** shows one card per model with its state (Not downloaded, Downloading,
+Partly downloaded, Needs setup, Ready, Missing files), what it can do (text to video,
+image to video, sound, lip sync, ...) and one button for the next step:
 
-Settings will offer **Notify me when generation finishes** (upcoming; requires
-a frontend update). When enabled, the UI requests browser notification
-permission and shows a notification when a generation job completes, fails, or
-is cancelled, so you do not need to watch the tab while waiting. The
-preference is saved locally. Notifications require granting browser
-notification permission; if permission was previously denied, reset it in the
-browser's site settings for this site before turning the setting on.
+- **Download** saves the model's files into their category folders (`diffusion_models/`,
+  `text_encoders/`, `vae/`, ...) with progress and time left. **Stop** keeps the
+  downloaded part, so **Resume** continues from there.
+- **Set up** opens the setup guide for a downloaded model: it says which file goes into
+  which input and which settings the model needs, and creates a *variant* (a saved
+  combination of files and defaults) for you to check and save.
+- **Use** opens **Create** with that model selected.
 
-### LoRAs
+**Details** shows a model's description, its variants (edit, copy, delete), its files
+(delete the downloaded files after a confirmation that lists them and says which other
+models use them) and, under **Advanced**, the raw download entry.
 
-To apply a LoRA, open **LoRA**, select a compatible file, and set its
-**Strength**. Place files under `models/loras/` or `models/Lora/`. Browser
-requests use this selector; prompt tags such as `<lora:name:1>` are CLI syntax
-and are not parsed by the native server API.
+**Add your own model** is a short wizard: pick the model type, choose a file for each
+input it needs (it lists what is still missing), set the defaults and save.
+
+**Settings** holds:
+
+- **Folders**: the models, inputs and outputs folders (see [Choose your folders](#choose-your-folders)).
+- **Storage**: every model file with its size, the variants that use it and the free
+  disk space; files can be deleted after a confirmation.
+- **Backup and restore**: save or load all variants and added downloads as one JSON file.
+- **Model list**: where the online model list comes from (**Released (master)**,
+  **Latest (develop)**, another address, or off), refresh it, rescan the model folders,
+  add a single file from a link (Hugging Face links get their size and SHA-256
+  automatically) or a new download entry.
+
+The model list is plain data (`downloads.json`), so adding or changing a model entry needs
+no rebuild or restart: edit `downloads.json` on GitHub and click **Refresh model list**.
+Choose **Latest (develop)** to get such edits before they are released.
+
+The built-in list has FastWan 2.2 5B, Wan 2.2 TI2V 5B, Wan 2.2 T2V / I2V A14B, Wan 2.2 S2V
+14B, Wan 2.1 T2V 1.3B / 14B, Wan 2.1 I2V 14B (480p and 720p), Wan 2.1 FLF2V 14B, Wan 2.1
+VACE 1.3B / 14B and Kandinsky 6.0 Lite. The 14B models use Q4_K_M files (about 10 GB each)
+so they fit in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
+
+Downloads never create variants by themselves. Files placed by hand in the category
+folders (see [Model directories](#model-directories)) work the same way after a rescan.
+
+### Create images and videos
+
+1. Open **Create** and pick a model from the **Model** list: ready variants first, then
+   your variants with missing files, then other model types whose files you pick
+   yourself. **Model files** shows a picker for every input of the chosen variant;
+   **Save as variant** stores a changed combination.
+2. Pick what to make under **What to make**. Every task is listed; the ones the chosen
+   model cannot do are dashed. Clicking one says why and lists the ready models that can
+   (with a **Use** button) and the model types to download or add. The tasks are text to
+   video, image to video, speech to video (lip sync), character to video (keep a person or
+   object from a picture, for example with Wan 2.1 VACE), video to video, text to image,
+   image to image, image edit, and text to audio, which no stable-diffusion.cpp model can
+   do yet.
+3. Add the inputs the task needs under **Inputs**: a start image (optional for some
+   models, required for image to video), an end frame, reference images, an audio clip
+   (any format the browser can decode, sent as WAV, up to 30 s) or a control video
+   (its frames are extracted in the browser). Image to image also has a **Strength**
+   slider. A message says which required input is still missing.
+4. Type a prompt and pick **Shape**, **Size** and, for video, **Length**.
+5. Click **Generate** (or press Ctrl+Enter). The preview shows the current stage, step,
+   elapsed time and time left; **Stop** cancels it. More jobs wait in the **Queue**.
+6. The result appears in the preview with **Reuse**, **Save**, **Delete** and close
+   buttons, and in the **Recent** strip.
+
+The inputs of each job are kept in the inputs folder (one file per distinct image or
+clip), and **Reuse** puts them back into the form together with the prompt and settings.
+
+**Command** shows what the job runs: the matching `sd-cli` command (PowerShell or
+bash, depending on the server's model folder), the JSON request for
+`/sdcpp/v1/vid_gen` or `img_gen` (images left out) and a `curl` line to send it.
+
+**Advanced** holds the negative prompt, steps, CFG, FPS and a fixed seed; empty fields
+use the model's defaults. **New** clears the prompt, the inputs, these overrides and
+the preview.
+
+Models that make sound (they have an audio VAE) are saved as AVI with the soundtrack,
+because WebM output is silent. The server also saves a silent WebM preview for the
+browser; the saved AVI keeps the sound. Results with sound show a ♪ badge.
+
+The **Gallery** lists every saved result with search and Video/Image filters. Its
+prompt bar at the bottom starts a text-to-video or text-to-image job with the current
+Create settings, and running jobs show as placeholder tiles. Click a tile to view it
+full size with its settings, reuse them, save the file or delete it.
+
+The new UI does not yet offer LoRAs. Use the native API or DGL scripts for those.
+
+### Server log
+
+The terminal shows each job as it runs: when it is queued (model, size, frames, steps
+and prompt), started, each stage and sampling step, when it is saved, and whether it
+finished, failed or was cancelled. Failed API requests are logged with their HTTP
+status and error message.
 
 ### DGL editor
 
-Open the Web UI and select **DGL** in the header. The workspace follows the
-server's `--listen-ip` setting. The default `127.0.0.1` limits access to the
-server machine. When the server listens on a LAN interface, open the Web UI
-using the server's LAN IP and port to use the workspace from another device.
-Use **Search scripts** to filter the script list, then select a saved script or
-choose **New**. **Save** updates the current file or asks for a name for a new
-script. Use **Save as…** to save a copy. The editor reopens the last saved script
-used in that browser when it is still available. **Run** submits the current
-editor text to the generation queue, including unsaved edits. The status bar
-below the editor shows progress and keeps the final status and elapsed time.
-The server terminal displays weight-loading throughput and sampling speed.
-
-When a script returns values, **View result** appears in the status bar. Open it
-to inspect text, scalars, tensor metadata, and encoded media. PNG appears as an
-image, WebM as a video player, and AVI as a download. WebM encoding is silent.
-Use AVI for a PCM16 soundtrack.
+Open the Web UI using the local server address and select **Scripts** in the sidebar.
+The workspace follows the server's `--listen-ip` setting. The default `127.0.0.1`
+limits access to the server machine. When the server listens on a LAN interface, open
+the Web UI using the server's LAN IP and port to use it from another device.
+Select a saved script or choose **New**. **Duplicate** saves a copy of the
+current editor text under a new name. Edit **File name** before saving to save
+under a different name. **Run** submits the editor text to the generation queue,
+so you can run unsaved edits. The results panel shows text, scalar and tensor
+information and returned encoded media. PNG appears as an image, WebM as a
+video player, and AVI as a download. WebM encoding is silent; use AVI for
+a PCM16 soundtrack.
 
 Use `image::encode` or `video::encode` and return their `{data, mime_type}`
 dicts, either directly or as named fields of the root dict. To save the same
@@ -149,23 +320,9 @@ encoded output, call `media::save("output/cover.png", cover)` before returning
 it. Saving is optional. The job result contains the same encoded bytes, and
 polling returns them without re-encoding.
 
-The editor underlines supported media paths and shows compact previews below
-their lines. Previews align with the code indentation, and files on the same
-line appear side by side when space permits. Media loads near the visible area
-of the editor. An output path without a file stays collapsed, and a completed
-run refreshes its preview when the file becomes available. Drag the handle in
-a preview's lower-right corner to resize it, or double-click the handle to reset it.
-Click an image or video preview to open it at a larger size. Expanded videos
-open at the current playback position. Click the picture to play or pause, or
-drag the timeline below it to seek. AVI path previews support MJPEG and
-uncompressed 24-bit RGB video with up to 64 MiB of PCM or 32-bit float audio.
-The speaker button mutes the preview. To adjust volume in an inline preview,
-hover or focus the speaker button to open the volume slider.
-Use a relative path under the server's working directory, such as
-`assets/reference.png` or `output/clip.webm`. Turn off **Media view** in the
-editor toolbar to hide the preview. The server previews files under `input/`,
-`output/`, and `assets/`. Start the server
-with `--no-media-view` to disable file previews at the server.
+The server can serve files under `input/`, `output/` and `assets/` for upstream
+editors' inline media previews; the Scripts page does not show them yet. Start the
+server with `--no-media-view` to turn that file access off.
 
 DGL jobs share an execution context for the lifetime of the server. Compatible
 scripts can reuse loaded model components across runs. The context can release
@@ -559,11 +716,9 @@ pnpm -v
 ```
 
 Run the following commands from the repository root. They work in PowerShell
-and POSIX shells. Initialize the frontend submodule if it is missing, then
-configure and build with CMake:
+and POSIX shells:
 
 ```sh
-git submodule update --init examples/server/frontend
 cmake -S . -B build -DSD_SERVER_BUILD_FRONTEND=ON
 cmake --build build --config Release
 ```
@@ -594,9 +749,72 @@ directory:
 
 This lets you develop or test the frontend without rebuilding the server binary.
 
-### Frontend repository
+### Frontend source
 
-The Web UI is maintained in the separate
-[sdcpp-webui repository](https://github.com/leejet/sdcpp-webui), included here as
-a Git submodule. Submit UI and frontend logic changes to that repository.
-Changes appear here when the submodule is updated.
+The Web UI ("sd.cpp Studio") lives in `examples/server/frontend` (Vue 3 + Vite). It has
+four pages and a queue drawer:
+
+| Page | What it does |
+| --- | --- |
+| Create | Pick a ready model, type a prompt, choose Video or Image, shape, size and length; Advanced holds steps, CFG, FPS, seed and the negative prompt |
+| Gallery | Saved results with a prompt bar at the bottom; open an item to reuse its settings, save or delete it |
+| Models | Download packages with progress, speed, cancel and resume |
+| Scripts | DGL script editor |
+
+The queue drawer lists running and waiting jobs with progress and an estimate of the time
+left. Estimates are learned from the stage timings stored with saved results, so they
+appear after the first result of each model.
+
+A model appears under Create when one of its recipes names default files (`models`) that
+exist. Image mode on a video model makes one frame; models whose single frames are noisy
+(Kandinsky 6) render a short clip and keep its middle frame (`still_frame`).
+
+For live UI development, run `pnpm dev` in `examples/server/frontend`; it proxies the API
+to the server in `SDCPP_SERVER` (default `http://127.0.0.1:1234`).
+
+### Saved results
+
+Finished image and video jobs are written to `--output-dir` (default `outputs`), each file
+with a `.json` sidecar holding the prompt, settings, seed, stage timings and the URLs of
+the job's saved inputs. The Gallery reads this folder. `--output-dir none` turns saving off.
+
+`--input-dir` keeps the uploaded start and end images, reference images, audio and control
+frames of each job, named by their content so a picture used twice is stored once
+(default: not kept).
+
+`--settings-file` names a JSON file that holds `models_dir`, `inputs_dir`, `outputs_dir`
+and `catalog_url`. When it names three existing folders they replace `--model-dir`,
+`--input-dir` and `--output-dir`; until then the Web UI asks for the folders first. The
+Web UI writes this file; the launchers pass `studio-settings.json` next to themselves.
+
+### Model downloads
+
+The Download tab merges three catalog layers; a package with the same `id` in a later
+layer replaces the earlier one:
+
+1. the built-in `downloads.json`;
+2. the online catalog from `--catalog-url` or the source chosen in **Settings → Model list**
+   (default: this file on the `master` branch of forevion-sdcpp; `none` turns it off), cached as `<model-dir>/downloads/.online-catalog.json`
+   so it keeps working offline;
+3. `<model-dir>/downloads/*.json` in the first model root: packages added or edited in
+   the UI (`<id>.json`) and any written by hand.
+
+Editing a built-in or online package saves your copy as `<id>.json`; **Reset** deletes it
+and brings the original back. Each package lists files with their category path, URL, size
+and optional SHA-256, and optionally:
+
+- `convert`: files fetched to a staging folder and packed into one GGUF. `types` lists the
+  output types in order of preference with an optional `min_ram_gb`; the first type the
+  machine has enough RAM for is used. `{type}` in `output` is replaced by that type.
+- `guide`: the setup guide used by **Set up** on the Models page. `inputs` maps input types
+  (`diffusion_model`, `t5xxl`, `llm`, `clip_l`, `vae`, `tae`, ...) to files, `alternatives`
+  lists optional swaps, `settings` holds the config defaults and rules (`defaults`,
+  `video_constraints`, `size_multiple`, `features`, `disabled_features`), and `notes` explain
+  the model. An input value of `{<convert id>}` becomes that step's packed file.
+
+Catalog paths must be `<category>/<file>` with a model file extension, so a package can
+never write outside the model folders.
+
+Downloads run one at a time with `curl` (built into Windows 10 and later; install it on
+Linux), resume after a stop or failure, and are checked against their SHA-256 before they
+are moved into place.

@@ -34,8 +34,10 @@ if(SD_SERVER_BUILD_FRONTEND AND EXISTS "${FRONTEND_DIR}")
             VERBATIM
         )
 
+        # BYPRODUCTS lets Ninja recompile main.cpp in the same build when the UI changed.
         add_custom_target(${TARGET}_frontend_header
             COMMAND "${PNPM_EXECUTABLE}" --ignore-workspace -C "${FRONTEND_DIR}" run build:header
+            BYPRODUCTS "${GENERATED_HTML_HEADER}"
             WORKING_DIRECTORY "${FRONTEND_DIR}"
             COMMENT "Generating gen_index_html.h"
             VERBATIM
@@ -78,6 +80,11 @@ add_executable(${TARGET}
     routes_sdapi.cpp
     routes_sdcpp.cpp
     routes_dgl.cpp
+    library.cpp
+    downloads.cpp
+    model_manager.cpp
+    studio_settings.cpp
+    device_info.cpp
     routes_media.cpp
 )
 if(APPLE)
@@ -103,10 +110,25 @@ foreach(RECIPE_FILE IN LISTS BUILTIN_RECIPE_FILES)
     string(APPEND SD_BUILTIN_RECIPES "R\"recipes(${RECIPE_JSON})recipes\",\n")
 endforeach()
 configure_file(recipes_builtin.h.in "${CMAKE_CURRENT_BINARY_DIR}/recipes_builtin.h" @ONLY)
+
+set(BUILTIN_DOWNLOADS_FILE "${CMAKE_CURRENT_SOURCE_DIR}/downloads.json")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${BUILTIN_DOWNLOADS_FILE}")
+file(READ "${BUILTIN_DOWNLOADS_FILE}" DOWNLOADS_JSON)
+# MSVC limits one string literal to about 16 KB, so the catalog is embedded in pieces that
+# downloads.cpp joins again before parsing.
+string(LENGTH "${DOWNLOADS_JSON}" DOWNLOADS_LENGTH)
+set(SD_BUILTIN_DOWNLOADS "")
+set(DOWNLOADS_OFFSET 0)
+while(DOWNLOADS_OFFSET LESS DOWNLOADS_LENGTH)
+    string(SUBSTRING "${DOWNLOADS_JSON}" ${DOWNLOADS_OFFSET} 8000 DOWNLOADS_PIECE)
+    string(APPEND SD_BUILTIN_DOWNLOADS "R\"downloads(${DOWNLOADS_PIECE})downloads\",\n")
+    math(EXPR DOWNLOADS_OFFSET "${DOWNLOADS_OFFSET} + 8000")
+endwhile()
+configure_file(downloads_builtin.h.in "${CMAKE_CURRENT_BINARY_DIR}/downloads_builtin.h" @ONLY)
 target_include_directories(${TARGET} PRIVATE "${CMAKE_CURRENT_BINARY_DIR}")
 
 install(TARGETS ${TARGET} RUNTIME)
-target_link_libraries(${TARGET} PRIVATE stable-diffusion ${CMAKE_THREAD_LIBS_INIT})
+target_link_libraries(${TARGET} PRIVATE stable-diffusion ggml ${CMAKE_THREAD_LIBS_INIT})
 if(SD_WEBP)
     target_compile_definitions(${TARGET} PRIVATE SD_USE_WEBP)
     target_link_libraries(${TARGET} PRIVATE webp libwebpmux)

@@ -1985,6 +1985,8 @@ struct LLMEmbedder : public Conditioner {
     std::shared_ptr<LLM::LLMRunner> llm;
     std::shared_ptr<T5Runner> byt5;
     std::shared_ptr<PH3ImageTextConnectorRunner> ph3_connector;
+    std::shared_ptr<Tokenizer> clip_l_tokenizer;
+    std::shared_ptr<CLIPTextModelRunner> clip_l;
     std::shared_ptr<ClipProjConnectorRunner> clipproj_connector;
 
     bool supports_prompt_images() const override {
@@ -2052,7 +2054,9 @@ struct LLMEmbedder : public Conditioner {
         } else if (version == VERSION_MOSS_IMAGE) {
             arch = LLM::LLMArch::QWEN3_5;
         }
-        if (arch == LLM::LLMArch::QWEN2_5_VL || arch == LLM::LLMArch::QWEN3_VL || arch == LLM::LLMArch::QWEN3_5) {
+        // Kandinsky 6 encodes text only; its Qwen2.5-VL checkpoint still ships the vision tower.
+        if ((arch == LLM::LLMArch::QWEN2_5_VL || arch == LLM::LLMArch::QWEN3_VL || arch == LLM::LLMArch::QWEN3_5) &&
+            !sd_version_is_kandinsky6(version)) {
             for (const auto& entry : tensor_storage_map) {
                 if (starts_with(entry.first, "text_encoders.llm.visual.")) {
                     enable_vision = true;
@@ -2123,6 +2127,22 @@ struct LLMEmbedder : public Conditioner {
                 }
             }
         }
+        if (sd_version_is_kandinsky6(version)) {
+            const std::string clip_l_prefix = "text_encoders.clip_l.transformer.text_model";
+            if (!std::any_of(tensor_storage_map.begin(), tensor_storage_map.end(), [&](const auto& entry) {
+                    return starts_with(entry.first, clip_l_prefix + ".");
+                })) {
+                throw std::runtime_error("Kandinsky 6 requires the CLIP-L text encoder; pass --clip_l or clip_l_path");
+            }
+            if (tokenizers.has(TokenizerConfig::CLIP_L)) {
+                clip_l_tokenizer = tokenizers.create(TokenizerConfig::CLIP_L, 49408, 49407, false, true);
+            }
+            if (!clip_l_tokenizer) {
+                clip_l_tokenizer = std::make_shared<CLIPTokenizer>();
+            }
+            clip_l = std::make_shared<CLIPTextModelRunner>(backend, tensor_storage_map, clip_l_prefix,
+                                                           OPENAI_CLIP_VIT_L_14, true, false, weight_manager);
+        }
     }
 
     void get_param_tensors(std::map<std::string, ggml_tensor*>& tensors) override {
@@ -2135,6 +2155,9 @@ struct LLMEmbedder : public Conditioner {
         }
         if (byt5) {
             byt5->get_param_tensors(tensors, "text_encoders.t5xxl.transformer");
+        }
+        if (clip_l) {
+            clip_l->get_param_tensors(tensors, "text_encoders.clip_l.transformer.text_model");
         }
     }
 
@@ -2153,6 +2176,9 @@ struct LLMEmbedder : public Conditioner {
         if (byt5) {
             byt5->set_max_graph_vram_bytes(max_vram_bytes);
         }
+        if (clip_l) {
+            clip_l->set_max_graph_vram_bytes(max_vram_bytes);
+        }
     }
 
     void set_runtime_backends(const std::vector<ggml_backend_t>& backends) override {
@@ -2166,6 +2192,9 @@ struct LLMEmbedder : public Conditioner {
         if (byt5) {
             byt5->set_runtime_backends(backends);
         }
+        if (clip_l) {
+            clip_l->set_runtime_backends(backends);
+        }
     }
 
     void set_graph_cut_layer_split_enabled(bool enabled) override {
@@ -2174,6 +2203,9 @@ struct LLMEmbedder : public Conditioner {
         }
         if (byt5) {
             byt5->set_graph_cut_layer_split_enabled(enabled);
+        }
+        if (clip_l) {
+            clip_l->set_graph_cut_layer_split_enabled(enabled);
         }
     }
 
@@ -2184,12 +2216,18 @@ struct LLMEmbedder : public Conditioner {
         if (byt5) {
             byt5->set_graph_cut_layer_split_backend_vram_limits(limits);
         }
+        if (clip_l) {
+            clip_l->set_graph_cut_layer_split_backend_vram_limits(limits);
+        }
     }
 
     void get_layer_split_param_tensors(std::map<std::string, ggml_tensor*>& tensors) override {
         llm->get_param_tensors(tensors, "text_encoders.llm");
         if (byt5) {
             byt5->get_param_tensors(tensors, "text_encoders.t5xxl.transformer");
+        }
+        if (clip_l) {
+            clip_l->get_param_tensors(tensors, "text_encoders.clip_l.transformer.text_model");
         }
     }
 
@@ -2204,6 +2242,9 @@ struct LLMEmbedder : public Conditioner {
         if (byt5) {
             byt5->set_flash_attention_enabled(enabled);
         }
+        if (clip_l) {
+            clip_l->set_flash_attention_enabled(enabled);
+        }
     }
 
     void set_scale_overrides(float linear_scale, float attn_scale) override {
@@ -2216,6 +2257,9 @@ struct LLMEmbedder : public Conditioner {
         }
         if (byt5) {
             byt5->set_scale_overrides(linear_scale, attn_scale);
+        }
+        if (clip_l) {
+            clip_l->set_scale_overrides(linear_scale, attn_scale);
         }
     }
 
@@ -2232,6 +2276,9 @@ struct LLMEmbedder : public Conditioner {
         if (byt5) {
             byt5->set_weight_adapter(adapter);
         }
+        if (clip_l) {
+            clip_l->set_weight_adapter(adapter);
+        }
     }
 
     void runner_end() override {
@@ -2247,6 +2294,38 @@ struct LLMEmbedder : public Conditioner {
         if (byt5) {
             byt5->runner_end();
         }
+        if (clip_l) {
+            clip_l->runner_end();
+        }
+    }
+
+    // HF CLIPTextModel pooler_output: final layer norm at the first EOS. Emphasis weights only
+    // affect the token embeddings, so they are parsed out of the text and otherwise ignored.
+    sd::Tensor<float> encode_clip_l_pooled(int n_threads, const std::string& text) {
+        std::vector<int> tokens;
+        for (const auto& item : parse_prompt_attention(text)) {
+            std::vector<int> part;
+            if (!clip_l_tokenizer->encode(item.first, part)) {
+                LOG_ERROR("CLIP-L tokenization failed");
+                return {};
+            }
+            tokens.insert(tokens.end(), part.begin(), part.end());
+        }
+        clip_l_tokenizer->pad_tokens(tokens, nullptr, nullptr, 77, 77, false);
+        auto eos           = std::find(tokens.begin(), tokens.end(), clip_l_tokenizer->EOS_TOKEN_ID);
+        size_t eos_index   = std::min<size_t>(std::distance(tokens.begin(), eos), tokens.size() - 1);
+        auto pooled        = clip_l->compute(n_threads,
+                                             sd::Tensor<int32_t>({static_cast<int64_t>(tokens.size())}, tokens),
+                                             0,
+                                             nullptr,
+                                             eos_index,
+                                             true,
+                                             -1,
+                                             false);
+        if (pooled.empty()) {
+            LOG_ERROR("CLIP-L pooled encoding failed");
+        }
+        return pooled;
     }
 
     static std::vector<std::pair<std::string, float>> parse_text_attention(const std::string& text,
@@ -3342,6 +3421,30 @@ struct LLMEmbedder : public Conditioner {
             SDCondition result;
             result.c_crossattn = std::move(hidden_states);
             return result;
+        } else if (sd_version_is_kandinsky6(version)) {
+            // Verbatim from the reference pipeline, including its typos ("promt", "scren").
+            static const char* const kandinsky6_template =
+                "<|im_start|>system\nYou are a promt engineer. Describe the video in detail.\n"
+                "Describe how the camera moves or shakes, describe the zoom and view angle, whether it follows the objects.\n"
+                "Describe the location of the video, main characters or objects and their action.\n"
+                "Describe the dynamism of the video and presented actions.\n"
+                "Name the visual style of the video: whether it is a professional footage, user generated content, "
+                "some kind of animation, video game or scren content.\n"
+                "Describe the visual effects, postprocessing and transitions if they are presented in the video.\n"
+                "Pay attention to the order of key actions shown in the scene.<|im_end|>\n"
+                "<|im_start|>user\n";
+            dynamic_template_crop = true;
+            prompt                = system_prefix(kandinsky6_template);
+            auto prefix_tokens    = conditioner_params.raw ? std::vector<int>{} : std::get<0>(tokenize(prompt, {0, 0}));
+            if (!conditioner_params.raw && prefix_tokens.empty()) {
+                return {};
+            }
+            prompt_template_encode_start_idx = static_cast<int>(prefix_tokens.size());
+            max_length                       = prompt_template_encode_start_idx + 1024;
+            prompt_attn_range.first          = static_cast<int>(prompt.size());
+            prompt += conditioner_params.text;
+            prompt_attn_range.second = static_cast<int>(prompt.size());
+            prompt_suffix            = "<|im_end|>";
         } else if (version == VERSION_IRIS) {
             dynamic_template_crop = true;
             prompt =
@@ -3466,6 +3569,12 @@ struct LLMEmbedder : public Conditioner {
         result.c_crossattn        = std::move(hidden_states);
         result.extra_c_crossattns = std::move(extra_hidden_states_vec);
         result.c_vector           = std::move(text_mask);
+        if (clip_l) {
+            result.c_vector = encode_clip_l_pooled(n_threads, conditioner_params.text);
+            if (result.c_vector.empty()) {
+                return {};
+            }
+        }
         if (version == VERSION_QWEN_IMAGE_2_1) {
             auto slots             = sd::Tensor<int32_t>::zeros({result.c_crossattn.shape()[1]});
             const auto& references = params.prompt_input == nullptr ? image_embeds : prompt_tokens.image_embeds;

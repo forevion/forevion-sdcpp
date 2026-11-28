@@ -103,6 +103,7 @@ model guide.
 ## Video generation
 
 - [HunyuanVideo 1.5](hunyuan_video.md)
+- [Kandinsky 6](kandinsky6.md)
 - [LingBot-Video](lingbot_video.md)
 - [LTX-2.3 / LTX-2.5](ltx2.md)
 - [MiniMax-H3](minimax_h3.md)

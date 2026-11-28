@@ -448,6 +448,16 @@ SDVersion ModelLoader::get_sd_version() const {
         if (tensor_storage_map.count(prefix + "model.x_embedder.proj1.weight") &&
             tensor_storage_map.count(prefix + "model.language_model.layers.0.self_attn.q_proj.weight"))
             return VERSION_HIDREAM_O1;
+        if (tensor_storage_map.count(prefix + "visual_transformer_blocks.0.va_cross_attention.to_query.weight") &&
+            tensor_storage_map.count(prefix + "video_text_embeddings.in_layer.weight")) {
+            // Distilled checkpoints predict n_grid PiFlow velocities per audio channel, the others one.
+            auto audio_in  = tensor_storage_map.find(prefix + "audio_embeddings.in_layer.weight");
+            auto audio_out = tensor_storage_map.find(prefix + "audio_out_layer.out_layer.weight");
+            if (audio_in != tensor_storage_map.end() && audio_out != tensor_storage_map.end() &&
+                audio_in->second.ne[0] == audio_out->second.ne[1])
+                return VERSION_KANDINSKY6_FLOW;
+            return VERSION_KANDINSKY6;
+        }
     }
     for (const std::string prefix : {"", "first_stage_model.", "vae.", "flash."}) {
         if (tensor_storage_map.count(prefix + "condition_encoder.projection.weight") &&

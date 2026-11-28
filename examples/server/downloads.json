@@ -1,0 +1,1441 @@
+{
+  "schema_version": 1,
+  "packages": [
+    {
+      "id": "fastwan22-5b",
+      "name": "FastWan 2.2 5B",
+      "group": "Wan 2.2",
+      "description": "Fast text/image-to-video and stills: 3 steps with the tiny decoder. About 1.5 min for a 9-frame 1280x704 clip on a 16-core CPU.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/FastWan2.2-TI2V-5B-q8_0.gguf",
+          "url": "https://huggingface.co/Green-Sky/FastWan2.2-TI2V-5B-FullAttn-GGUF/resolve/main/FastWan2.2-TI2V-5B-q8_0.gguf",
+          "sha256": "b62f50ff87c4dfa2910c6883d45015e05b709366581698b302e259e7f25c9208",
+          "size": 5412844128
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/taew2_2.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_2.safetensors",
+          "sha256": "b84609b2a133d48434bd9636bfcb44bf05168dc436e2d3cecf26256faa1f5325",
+          "size": 22848048
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Fast Wan 2.2 distillation: 3 steps with CFG 1 and the LCM sampler (the guide includes its tuned sigmas).",
+          "Makes video, or a still image with Image selected. 1280x704 is the native size; Small halves the pixels."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/FastWan2.2-TI2V-5B-q8_0.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "tae": "vae/taew2_2.safetensors"
+        },
+        "settings": {
+          "size_multiple": 32,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "lcm",
+            "custom_sigmas": [
+              1.0,
+              0.757,
+              0.522,
+              0.0
+            ],
+            "video_frames": 121,
+            "fps": 24,
+            "cfg_scale": 1,
+            "steps": 3,
+            "width": 1280,
+            "height": 704
+          },
+          "features": [
+            "init_image"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/FastVideo/FastWan2.2-TI2V-5B-FullAttn-Diffusers"
+        }
+      }
+    },
+    {
+      "id": "wan22-ti2v-5b",
+      "name": "Wan 2.2 TI2V 5B",
+      "group": "Wan 2.2",
+      "description": "The full Wan 2.2 5B model with its own VAE: 20 steps with CFG. Slow, best Wan detail.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/Wan2.2-TI2V-5B-Q8_0.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.2-TI2V-5B-GGUF/resolve/main/Wan2.2-TI2V-5B-Q8_0.gguf",
+          "sha256": "57bece983817ab2f957546683bb670f13be7d99022d45674840cd999a050ea8f",
+          "size": 5400179040
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan2.2_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/vae/wan2.2_vae.safetensors",
+          "sha256": "e40321bd36b9709991dae2530eb4ac303dd168276980d3e9bc4b6e2b75fed156",
+          "size": 1409400960
+        }
+      ],
+      "guide": {
+        "notes": [
+          "The full Wan 2.2 TI2V 5B: 20 steps with CFG 5 and flow shift 5. Slow on a CPU, but the most detail of the Wan models.",
+          "Uses the full Wan 2.2 VAE. For a much faster decode, pick the Tiny decoder (taew2_2 from the FastWan package) instead."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/Wan2.2-TI2V-5B-Q8_0.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan2.2_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 32,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 24,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 1280,
+            "height": 704,
+            "flow_shift": 5
+          },
+          "features": [
+            "flow_shift",
+            "init_image"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.2-TI2V-5B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_2.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan22-t2v-a14b",
+      "name": "Wan 2.2 T2V A14B",
+      "group": "Wan 2.2",
+      "description": "The large Wan 2.2 text-to-video model (Q4_K_M): two 14B experts, one for the rough layout and one for detail. Best Wan quality, slowest.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/Wan2.2-T2V-A14B-HighNoise-Q4_K_M.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.2-T2V-A14B-GGUF/resolve/main/HighNoise/Wan2.2-T2V-A14B-HighNoise-Q4_K_M.gguf",
+          "sha256": "e0c490c6e316fd91ff52034e4ca66b825717e33ff11624585c0ccfcb5d410c59",
+          "size": 9650090496
+        },
+        {
+          "path": "diffusion_models/Wan2.2-T2V-A14B-LowNoise-Q4_K_M.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.2-T2V-A14B-GGUF/resolve/main/LowNoise/Wan2.2-T2V-A14B-LowNoise-Q4_K_M.gguf",
+          "sha256": "091a5bae02e14aa016bc9b10a7892efda4c629346b81c5dcebbe30ea2ac8923a",
+          "size": 9650090496
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two experts of about 9.7 GB each; with memory mapping they fit in 32 GB of RAM. 14B on a CPU is slow.",
+          "Starts at 832x480. Wan 2.2 A14B uses the Wan 2.1 VAE (not the 5B model's Wan 2.2 VAE).",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "high_noise_diffusion_model": "diffusion_models/Wan2.2-T2V-A14B-HighNoise-Q4_K_M.gguf",
+          "diffusion_model": "diffusion_models/Wan2.2-T2V-A14B-LowNoise-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 16,
+            "flow_shift": 12,
+            "high_noise_steps": -1,
+            "cfg_scale": 3,
+            "steps": 20,
+            "width": 832,
+            "height": 480,
+            "moe_boundary": 0.875
+          },
+          "features": [
+            "flow_shift"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan22-i2v-a14b",
+      "name": "Wan 2.2 I2V A14B",
+      "group": "Wan 2.2",
+      "description": "The large Wan 2.2 image-to-video model (Q4_K_M, two experts). Also takes an end frame.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/HighNoise/Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
+          "sha256": "836250abfaa3411694e2c9cf3a0cc18265329d5156d81aa116d5366b0f8f02e7",
+          "size": 9651728896
+        },
+        {
+          "path": "diffusion_models/Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.2-I2V-A14B-GGUF/resolve/main/LowNoise/Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
+          "sha256": "e2f98d834af009d035c6b0918268f2eba0aa8a63025ce942277e2384d40b0866",
+          "size": 9651728896
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two experts of about 9.7 GB each; with memory mapping they fit in 32 GB of RAM.",
+          "Pick Image → video and add a start image (and optionally an end frame).",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "high_noise_diffusion_model": "diffusion_models/Wan2.2-I2V-A14B-HighNoise-Q4_K_M.gguf",
+          "diffusion_model": "diffusion_models/Wan2.2-I2V-A14B-LowNoise-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 16,
+            "flow_shift": 5,
+            "high_noise_steps": -1,
+            "cfg_scale": 3.5,
+            "steps": 20,
+            "width": 832,
+            "height": 480,
+            "moe_boundary": 0.9
+          },
+          "features": [
+            "end_image",
+            "flow_shift",
+            "init_image"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan22-s2v-14b",
+      "name": "Wan 2.2 S2V 14B",
+      "group": "Wan 2.2",
+      "description": "Speech to video (lip sync, Q4_K_M): a portrait talks along to your audio clip.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.2-S2V-14B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/Wan2.2-S2V-14B-Q4_K_M.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.2-S2V-14B-GGUF/resolve/main/Wan2.2-S2V-14B-Q4_K_M.gguf",
+          "sha256": "6a96e304e6d39c7e1d8d2c973f1e5cdd4aa1785dd9a29fdd8274f4a9cb037324",
+          "size": 13861697120
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "text_encoders/wav2vec2_large_english_fp16.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.2/resolve/main/split_files/audio_encoders/wav2vec2_large_english_fp16.safetensors",
+          "sha256": "f0017a43ea57ef6b3d4866be607844bbd8cada6d30966f7d70044ed0d63d3f9e",
+          "size": 630997322
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Pick Speech → video, add a portrait and an audio clip, and set Length to the clip's length.",
+          "The output plays at 16 fps. The clip itself is silent; the speech is not mixed into the video.",
+          "14B on a CPU is slow: expect tens of minutes for a short 480p clip. Q4_K_M keeps the file near 10 GB so it fits in 32 GB of RAM."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/Wan2.2-S2V-14B-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "audio_encoder": "text_encoders/wav2vec2_large_english_fp16.safetensors",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1,
+            "fixed_fps": 16
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "flow_shift": 3,
+            "video_frames": 33,
+            "cfg_scale": 4.5,
+            "steps": 20,
+            "width": 832,
+            "height": 480
+          },
+          "features": [
+            "flow_shift",
+            "init_image",
+            "ref_audios"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.2-S2V-14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-t2v-1.3b",
+      "name": "Wan 2.1 T2V 1.3B",
+      "group": "Wan 2.1",
+      "description": "Small, quick Wan 2.1 text-to-video at 480p. Good for trying prompts before a bigger model.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-T2V-1.3B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+          "sha256": "be531024cd9018cb5b48c40cfbb6a6191645b1c792eb8bf4f8c1c6e10f924dc5",
+          "size": 2838303560
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Wan 2.1 1.3B: 20 steps with CFG 5. Made for 832x480.",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/wan2.1_t2v_1.3B_fp16.safetensors",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 16,
+            "flow_shift": 5,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 832,
+            "height": 480
+          },
+          "features": [
+            "flow_shift"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-t2v-14b",
+      "name": "Wan 2.1 T2V 14B",
+      "group": "Wan 2.1",
+      "description": "The large Wan 2.1 text-to-video model (Q4_K_M): much better motion and detail than 1.3B, much slower.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-T2V-14B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/wan2.1-t2v-14b-Q4_K_M.gguf",
+          "url": "https://huggingface.co/city96/Wan2.1-T2V-14B-gguf/resolve/main/wan2.1-t2v-14b-Q4_K_M.gguf",
+          "sha256": "c9a64d612831debbac77af93744d4b5196b840bf65e9f9f5b958d03fc3baddf2",
+          "size": 10124581504
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "14B on a CPU is slow: expect tens of minutes for a short 480p clip. Q4_K_M keeps the file near 10 GB so it fits in 32 GB of RAM.",
+          "Starts at 832x480; 1280x720 also works but takes about 2.5 times longer.",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/wan2.1-t2v-14b-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 16,
+            "flow_shift": 5,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 832,
+            "height": 480
+          },
+          "features": [
+            "flow_shift"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-T2V-14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-i2v-14b-480p",
+      "name": "Wan 2.1 I2V 14B 480p",
+      "group": "Wan 2.1",
+      "description": "Animates a start image (Q4_K_M, 480p). Needs the CLIP Vision H image encoder, which is included.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+          "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-480P-gguf/resolve/main/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+          "sha256": "d91f7139acadb42ea05cdf97b311e5099f714f11fbe4d90916500e2f53cbba82",
+          "size": 11341184384
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "clip_vision/clip_vision_h.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/clip_vision/clip_vision_h.safetensors",
+          "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161",
+          "size": 1264219396
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "14B on a CPU is slow: expect tens of minutes for a short 480p clip. Q4_K_M keeps the file near 10 GB so it fits in 32 GB of RAM.",
+          "Pick Image → video on Create and add a start image.",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/wan2.1-i2v-14b-480p-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "clip_vision": "clip_vision/clip_vision_h.safetensors",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 16,
+            "flow_shift": 3,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 832,
+            "height": 480
+          },
+          "features": [
+            "flow_shift",
+            "init_image"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-i2v-14b-720p",
+      "name": "Wan 2.1 I2V 14B 720p",
+      "group": "Wan 2.1",
+      "description": "The 720p version of Wan 2.1 image-to-video (Q4_K_M). Sharper than 480p and about 2.5 times slower.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-720P",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+          "url": "https://huggingface.co/city96/Wan2.1-I2V-14B-720P-gguf/resolve/main/wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+          "sha256": "ffecd91e4b636d8e3e43f3fa388218158ba447109547bde777c6d67ef4fe42a4",
+          "size": 11341184384
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "clip_vision/clip_vision_h.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/clip_vision/clip_vision_h.safetensors",
+          "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161",
+          "size": 1264219396
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "14B on a CPU is slow: expect tens of minutes for a short 480p clip. Q4_K_M keeps the file near 10 GB so it fits in 32 GB of RAM.",
+          "Pick Image → video on Create and add a start image.",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/wan2.1-i2v-14b-720p-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "clip_vision": "clip_vision/clip_vision_h.safetensors",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "fps": 16,
+            "flow_shift": 3,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 1280,
+            "height": 720
+          },
+          "features": [
+            "flow_shift",
+            "init_image"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-I2V-14B-480P"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-flf2v-14b",
+      "name": "Wan 2.1 FLF2V 14B",
+      "group": "Wan 2.1",
+      "description": "First and last frame to video (Q4_K_M, 720p): the clip moves from your start image to your end image.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-FLF2V-14B-720P",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/wan2.1-flf2v-14b-720p-Q4_K_M.gguf",
+          "url": "https://huggingface.co/city96/Wan2.1-FLF2V-14B-720P-gguf/resolve/main/wan2.1-flf2v-14b-720p-Q4_K_M.gguf",
+          "sha256": "7652d7d8b0795009ff21ed83d806af762aae8a8faa8640dd07b3a67e4dfab445",
+          "size": 11343816128
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "clip_vision/clip_vision_h.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/clip_vision/clip_vision_h.safetensors",
+          "sha256": "64a7ef761bfccbadbaa3da77366aac4185a6c58fa5de5f589b42a65bcc21f161",
+          "size": 1264219396
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "14B on a CPU is slow: expect tens of minutes for a short 480p clip. Q4_K_M keeps the file near 10 GB so it fits in 32 GB of RAM.",
+          "Pick Image → video and add both a start image and an end frame.",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/wan2.1-flf2v-14b-720p-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "clip_vision": "clip_vision/clip_vision_h.safetensors",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "flow_shift": 16,
+            "video_frames": 21,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 1280,
+            "height": 720
+          },
+          "features": [
+            "end_image",
+            "flow_shift",
+            "init_image"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-FLF2V-14B-720P"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-vace-1.3b",
+      "name": "Wan 2.1 VACE 1.3B",
+      "group": "Wan 2.1",
+      "description": "Character → video (keep a person or object from a picture) and video → video (follow a control video), small and quick.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-VACE-1.3B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
+          "sha256": "640ccc0577e6a5d4bb15cd91b11b699ef914fc55f126c5a1c544e152130784f2",
+          "size": 4309519800
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Character → video: add the picture of the person or object to keep. Video → video: add a control video (pose, depth or a clip).",
+          "VACE encodes the reference with the VAE, so keep the full Wan 2.1 VAE selected.",
+          "Uses the Wan 2.1 VAE; pick the Tiny decoder (taew2_1, included) in the variant for a much faster, slightly softer decode."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/wan2.1_vace_1.3B_fp16.safetensors",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 832,
+            "height": 480,
+            "flow_shift": 16
+          },
+          "features": [
+            "control_frames",
+            "flow_shift",
+            "init_image",
+            "vace"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-VACE-14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "wan21-vace-14b",
+      "name": "Wan 2.1 VACE 14B",
+      "group": "Wan 2.1",
+      "description": "The large VACE model (Q4_K_M): character → video and video → video with better quality, much slower.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Wan-AI/Wan2.1-VACE-14B",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "diffusion_models/Wan2.1_14B_VACE-Q4_K_M.gguf",
+          "url": "https://huggingface.co/QuantStack/Wan2.1_14B_VACE-GGUF/resolve/main/Wan2.1_14B_VACE-Q4_K_M.gguf",
+          "sha256": "d03b2280e996172e55d91e8c41cc8a0c28fd89afc6ddbdb0572caa97fd8cc5a6",
+          "size": 11639453600
+        },
+        {
+          "path": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "url": "https://huggingface.co/city96/umt5-xxl-encoder-gguf/resolve/main/umt5-xxl-encoder-Q8_0.gguf",
+          "sha256": "2521d4de0bf9e1cc6549866463ceae85e4ec3239bc6063f7488810be39033bbc",
+          "size": 6043068256
+        },
+        {
+          "path": "vae/wan_2.1_vae.safetensors",
+          "url": "https://huggingface.co/Comfy-Org/Wan-2.1/resolve/main/split_files/vae/wan_2.1_vae.safetensors",
+          "sha256": "2fc39d31359a4b0a64f55876d8ff7fa8d780956ae2cb13463b0223e15148976b",
+          "size": 253815318
+        },
+        {
+          "path": "vae/taew2_1.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taew2_1.safetensors",
+          "sha256": "04766eac0221b5390b985ae3fdcca652cbb4b1e8b82b28ea7ff89dfad1b1a93f",
+          "size": 22642902
+        }
+      ],
+      "guide": {
+        "notes": [
+          "14B on a CPU is slow: expect tens of minutes for a short 480p clip. Q4_K_M keeps the file near 10 GB so it fits in 32 GB of RAM.",
+          "Character → video: add the picture of the person or object to keep. Video → video: add a control video."
+        ],
+        "inputs": {
+          "diffusion_model": "diffusion_models/Wan2.1_14B_VACE-Q4_K_M.gguf",
+          "t5xxl": "text_encoders/umt5-xxl-encoder-Q8_0.gguf",
+          "vae": "vae/wan_2.1_vae.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "video_frames": 33,
+            "cfg_scale": 5,
+            "steps": 20,
+            "width": 832,
+            "height": 480,
+            "flow_shift": 16
+          },
+          "features": [
+            "control_frames",
+            "flow_shift",
+            "init_image",
+            "vace"
+          ],
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/Wan-AI/Wan2.1-VACE-14B"
+        },
+        "alternatives": {
+          "tae": "vae/taew2_1.safetensors"
+        }
+      }
+    },
+    {
+      "id": "kandinsky6-lite",
+      "name": "Kandinsky 6.0 Lite",
+      "group": "Kandinsky 6",
+      "description": "Distilled text-to-video, 10 steps. Includes the TAEHV tiny decoder (fast) and the HunyuanVideo VAE (sharp). The transformer is packed to Q8_0; the Qwen text encoder stays bf16 on machines with 48 GB RAM or more, otherwise it is packed to Q8_0.",
+      "license": "MIT",
+      "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "text_encoders/kandinsky6-clip-l.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder_2/model.safetensors",
+          "sha256": "5f02387099a844470dcf7e621cb0af6106bb7ce428666e3bdffbd80b777b458a",
+          "size": 492263008
+        },
+        {
+          "path": "vae/kandinsky6-hunyuanvideo-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
+          "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
+          "size": 985943868
+        },
+        {
+          "path": "vae/taehv.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taehv.safetensors",
+          "sha256": "032ad4ddc689513287ce02fcc099b5278592526ed1eac0324a7fab94bb690ed9",
+          "size": 22642902
+        }
+      ],
+      "convert": [
+        {
+          "id": "transformer",
+          "output": "diffusion_models/kandinsky6-lite-distill-{type}.gguf",
+          "types": [
+            {
+              "type": "q8_0"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "diffusion_pytorch_model.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/transformer/diffusion_pytorch_model.safetensors",
+              "sha256": "b1b52668561d9138d93bb4da13c9999e615bf569be9f8cf65732d54652447f53",
+              "size": 6381599096
+            }
+          ]
+        },
+        {
+          "id": "qwen",
+          "output": "text_encoders/kandinsky6-qwen2.5-vl-7b-{type}.gguf",
+          "types": [
+            {
+              "type": "bf16",
+              "min_ram_gb": 48
+            },
+            {
+              "type": "q8_0"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "model.safetensors.index.json",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model.safetensors.index.json",
+              "size": 57619
+            },
+            {
+              "name": "model-00001-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00001-of-00005.safetensors",
+              "sha256": "e97b877e47fde53a6c6e77aafb36e58e91ee9d95c4a3eeac6f1b5c0e6a1c986e",
+              "size": 3900233256
+            },
+            {
+              "name": "model-00002-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00002-of-00005.safetensors",
+              "sha256": "a9a300a43b4724eee2abe7c18ceb26768d0ab011eb0cad19d9bfd2476a24d024",
+              "size": 3864726320
+            },
+            {
+              "name": "model-00003-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00003-of-00005.safetensors",
+              "sha256": "111223d173e00bbee81cba1216fad28668df3476706b7fd26f4d5b50f8b3a507",
+              "size": 3864726424
+            },
+            {
+              "name": "model-00004-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00004-of-00005.safetensors",
+              "sha256": "ef47f634fa57d46ee134edcc09f34085a47da1e16c12a2abe0d67118be6d72ed",
+              "size": 3864733680
+            },
+            {
+              "name": "model-00005-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00005-of-00005.safetensors",
+              "sha256": "0c859795ad3a627a9b95bcb762e059d5b768a4a36fdd4affeff269d93fdecc67",
+              "size": 1089994880
+            }
+          ]
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Distilled Kandinsky 6.0 Lite: 10 steps, CFG 1, Euler sampler with the PiFlow scheduler.",
+          "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
+          "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
+        ],
+        "inputs": {
+          "diffusion_model": "{transformer}",
+          "llm": "{qwen}",
+          "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
+          "tae": "vae/taehv.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "scheduler": "piflow",
+            "video_frames": 49,
+            "fps": 24,
+            "cfg_scale": 1,
+            "steps": 10,
+            "width": 864,
+            "height": 480
+          },
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers"
+        },
+        "alternatives": {
+          "vae": "vae/kandinsky6-hunyuanvideo-vae.safetensors"
+        }
+      }
+    },
+    {
+      "id": "kandinsky6-lite-full",
+      "name": "Kandinsky 6.0 Lite (full, CFG)",
+      "group": "Kandinsky 6",
+      "description": "The non-distilled Kandinsky 6.0 Lite: 50 Euler steps with CFG 5, so about ten times slower than Lite distill. Shares the text encoders and decoders with the Lite package. The transformer is packed to Q8_0; the Qwen text encoder stays bf16 on machines with 48 GB RAM or more, otherwise it is packed to Q8_0.",
+      "license": "MIT",
+      "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "text_encoders/kandinsky6-clip-l.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/text_encoder_2/model.safetensors",
+          "sha256": "5f02387099a844470dcf7e621cb0af6106bb7ce428666e3bdffbd80b777b458a",
+          "size": 492263008
+        },
+        {
+          "path": "vae/kandinsky6-hunyuanvideo-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
+          "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
+          "size": 985943868
+        },
+        {
+          "path": "vae/taehv.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taehv.safetensors",
+          "sha256": "032ad4ddc689513287ce02fcc099b5278592526ed1eac0324a7fab94bb690ed9",
+          "size": 22642902
+        }
+      ],
+      "convert": [
+        {
+          "id": "transformer",
+          "output": "diffusion_models/kandinsky6-lite-{type}.gguf",
+          "types": [
+            {
+              "type": "q8_0"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "diffusion_pytorch_model.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/transformer/diffusion_pytorch_model.safetensors",
+              "sha256": "1550090ca56fed8c75dda0d30f8aa7b46775e8e1ebb086b70ad532e40eb878f9",
+              "size": 7476528464
+            }
+          ]
+        },
+        {
+          "id": "qwen",
+          "output": "text_encoders/kandinsky6-qwen2.5-vl-7b-{type}.gguf",
+          "types": [
+            {
+              "type": "bf16",
+              "min_ram_gb": 48
+            },
+            {
+              "type": "q8_0"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "model.safetensors.index.json",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model.safetensors.index.json",
+              "size": 57619
+            },
+            {
+              "name": "model-00001-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00001-of-00005.safetensors",
+              "sha256": "e97b877e47fde53a6c6e77aafb36e58e91ee9d95c4a3eeac6f1b5c0e6a1c986e",
+              "size": 3900233256
+            },
+            {
+              "name": "model-00002-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00002-of-00005.safetensors",
+              "sha256": "a9a300a43b4724eee2abe7c18ceb26768d0ab011eb0cad19d9bfd2476a24d024",
+              "size": 3864726320
+            },
+            {
+              "name": "model-00003-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00003-of-00005.safetensors",
+              "sha256": "111223d173e00bbee81cba1216fad28668df3476706b7fd26f4d5b50f8b3a507",
+              "size": 3864726424
+            },
+            {
+              "name": "model-00004-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00004-of-00005.safetensors",
+              "sha256": "ef47f634fa57d46ee134edcc09f34085a47da1e16c12a2abe0d67118be6d72ed",
+              "size": 3864733680
+            },
+            {
+              "name": "model-00005-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00005-of-00005.safetensors",
+              "sha256": "0c859795ad3a627a9b95bcb762e059d5b768a4a36fdd4affeff269d93fdecc67",
+              "size": 1089994880
+            }
+          ]
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Non-distilled Kandinsky 6.0 Lite: 50 steps, CFG 5, Euler sampler with the discrete scheduler. Every step runs the model twice (prompt and negative prompt).",
+          "An empty negative prompt is replaced by the release's default negative prompt, as in the official pipeline.",
+          "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
+          "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
+        ],
+        "inputs": {
+          "diffusion_model": "{transformer}",
+          "llm": "{qwen}",
+          "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
+          "tae": "vae/taehv.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "scheduler": "discrete",
+            "video_frames": 49,
+            "fps": 24,
+            "cfg_scale": 5,
+            "steps": 50,
+            "width": 864,
+            "height": 480
+          },
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers"
+        },
+        "alternatives": {
+          "vae": "vae/kandinsky6-hunyuanvideo-vae.safetensors"
+        }
+      }
+    },
+    {
+      "id": "kandinsky6-pro-distill",
+      "name": "Kandinsky 6.0 Pro Distill",
+      "group": "Kandinsky 6",
+      "description": "Distilled Kandinsky 6.0 Pro (29B parameters): 10 PiFlow steps without CFG, about ten times slower than Lite distill on CPU. Downloading needs a 60 GB staging copy of the bf16 transformer, which is packed to Q8_0 (32 GB) on machines with 48 GB RAM or more, otherwise to Q4_K (17 GB). Shares the text encoders and decoders with the Lite package.",
+      "license": "MIT",
+      "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers",
+      "media": [
+        "video",
+        "image"
+      ],
+      "files": [
+        {
+          "path": "text_encoders/kandinsky6-clip-l.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/text_encoder_2/model.safetensors",
+          "sha256": "5f02387099a844470dcf7e621cb0af6106bb7ce428666e3bdffbd80b777b458a",
+          "size": 492263008
+        },
+        {
+          "path": "vae/kandinsky6-hunyuanvideo-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
+          "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
+          "size": 985943868
+        },
+        {
+          "path": "vae/taehv.safetensors",
+          "url": "https://raw.githubusercontent.com/madebyollin/taehv/9055eee0391548d1787938d040a161cbe396bf98/safetensors/taehv.safetensors",
+          "sha256": "032ad4ddc689513287ce02fcc099b5278592526ed1eac0324a7fab94bb690ed9",
+          "size": 22642902
+        }
+      ],
+      "convert": [
+        {
+          "id": "transformer",
+          "output": "diffusion_models/kandinsky6-pro-distill-{type}.gguf",
+          "types": [
+            {
+              "type": "q8_0",
+              "min_ram_gb": 48
+            },
+            {
+              "type": "q4_K"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "diffusion_pytorch_model.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/transformer/diffusion_pytorch_model.safetensors",
+              "sha256": "f84ea3266560bbd1f203a874b8cee43e080073820facaf3306cab8fae2798a97",
+              "size": 60344993576
+            }
+          ]
+        },
+        {
+          "id": "qwen",
+          "output": "text_encoders/kandinsky6-qwen2.5-vl-7b-{type}.gguf",
+          "types": [
+            {
+              "type": "bf16",
+              "min_ram_gb": 48
+            },
+            {
+              "type": "q8_0"
+            }
+          ],
+          "inputs": [
+            {
+              "name": "model.safetensors.index.json",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model.safetensors.index.json",
+              "size": 57619
+            },
+            {
+              "name": "model-00001-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00001-of-00005.safetensors",
+              "sha256": "e97b877e47fde53a6c6e77aafb36e58e91ee9d95c4a3eeac6f1b5c0e6a1c986e",
+              "size": 3900233256
+            },
+            {
+              "name": "model-00002-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00002-of-00005.safetensors",
+              "sha256": "a9a300a43b4724eee2abe7c18ceb26768d0ab011eb0cad19d9bfd2476a24d024",
+              "size": 3864726320
+            },
+            {
+              "name": "model-00003-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00003-of-00005.safetensors",
+              "sha256": "111223d173e00bbee81cba1216fad28668df3476706b7fd26f4d5b50f8b3a507",
+              "size": 3864726424
+            },
+            {
+              "name": "model-00004-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00004-of-00005.safetensors",
+              "sha256": "ef47f634fa57d46ee134edcc09f34085a47da1e16c12a2abe0d67118be6d72ed",
+              "size": 3864733680
+            },
+            {
+              "name": "model-00005-of-00005.safetensors",
+              "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/text_encoder/model-00005-of-00005.safetensors",
+              "sha256": "0c859795ad3a627a9b95bcb762e059d5b768a4a36fdd4affeff269d93fdecc67",
+              "size": 1089994880
+            }
+          ]
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Distilled Kandinsky 6.0 Pro: 10 steps, CFG 1, Euler sampler with the PiFlow scheduler.",
+          "Q8_0 is within 1% of the bf16 model; Q4_K, used below 48 GB RAM, differs by about 5% but fits in RAM with room for the rest of the pipeline.",
+          "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
+          "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
+        ],
+        "inputs": {
+          "diffusion_model": "{transformer}",
+          "llm": "{qwen}",
+          "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
+          "tae": "vae/taehv.safetensors"
+        },
+        "settings": {
+          "size_multiple": 16,
+          "video_constraints": {
+            "frame_step": 4,
+            "frame_offset": 1,
+            "frame_rounding": "ceil",
+            "min_frames": 1
+          },
+          "defaults": {
+            "sampling_method": "euler",
+            "scheduler": "piflow",
+            "video_frames": 49,
+            "fps": 24,
+            "cfg_scale": 1,
+            "steps": 10,
+            "width": 864,
+            "height": 480
+          },
+          "disabled_features": [
+            "img2img",
+            "mask_image"
+          ],
+          "model_url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers"
+        },
+        "alternatives": {
+          "vae": "vae/kandinsky6-hunyuanvideo-vae.safetensors"
+        }
+      }
+    }
+  ]
+}

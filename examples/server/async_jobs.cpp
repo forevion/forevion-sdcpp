@@ -1,6 +1,7 @@
 // Extracted from main.cpp during server refactor.
 
 #include "async_jobs.h"
+#include "device_info.h"
 
 #include <algorithm>
 #include <chrono>
@@ -15,6 +16,7 @@
 #include "common/log.h"
 #include "common/media_io.h"
 #include "common/resource_owners.hpp"
+#include "library.h"
 #include "model_catalog.h"
 
 class JobCancellationMonitor {
@@ -111,7 +113,17 @@ static void update_job_progress(AsyncGenerationJob& job, const char* stage, cons
         sample_pass = progress.sample_pass;
     }
     if (progress.stage != stage || progress.detail != detail || progress.sample_pass != sample_pass) {
-        progress.stage_started = std::chrono::steady_clock::now();
+        const auto now = std::chrono::steady_clock::now();
+        progress.stage_ms[progress.stage] += std::chrono::duration_cast<std::chrono::milliseconds>(now - progress.stage_started).count();
+        progress.stage_started = now;
+        if (std::string(stage) != "sampling")
+            LOG_INFO("job %s: %s%s%s", job.id.c_str(), stage, *detail ? " " : "", detail);
+    }
+    // One line per sampling step, so a terminal shows progress (sd.cpp's own bar shows s/it).
+    if (std::string(stage) == "sampling" && total > 0 && completed > 0 && completed != progress.completed) {
+        const double seconds = job.started_at ? (unix_timestamp_now_ms() - job.started_at) / 1000.0 : 0.0;
+        LOG_INFO("job %s: sampling step %lld/%lld (%.0f s since start)", job.id.c_str(), static_cast<long long>(completed),
+                 static_cast<long long>(total), seconds);
     }
     progress.stage       = stage;
     progress.detail      = detail;
@@ -124,6 +136,8 @@ static void update_job_progress(AsyncGenerationJob& job, const char* stage, cons
 static void finish_job_progress(AsyncGenerationJob& job) {
     std::lock_guard<std::mutex> lock(job.progress_mutex);
     job.progress.finished = std::chrono::steady_clock::now();
+    job.progress.stage_ms[job.progress.stage] +=
+        std::chrono::duration_cast<std::chrono::milliseconds>(job.progress.finished - job.progress.stage_started).count();
 }
 
 static void job_progress_callback(const sd_generation_progress_t* progress, void* data) noexcept {
@@ -504,7 +518,34 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
         return false;
     }
 
+    if (job.vid_gen.still_frame >= 0) {
+        free_sd_audio(generated_audio);
+        const int index = std::min(job.vid_gen.still_frame, num_results - 1);
+        update_job_progress(job, "encoding", "image");
+        auto image_bytes = encode_image_to_vector(EncodedImageFormat::PNG, results[index].data, results[index].width,
+                                                  results[index].height, results[index].channel, str_params, 100);
+        if (image_bytes.empty()) {
+            error_message = "failed to encode the still frame";
+            return false;
+        }
+        output_media_b64       = base64_encode(image_bytes);
+        output_media_mime_type = "image/png";
+        output_frame_count     = 1;
+        return true;
+    }
+
     update_job_progress(job, "encoding", "video");
+#ifdef SD_USE_WEBM
+    // WebM output is silent, so a clip with sound is written as AVI (PCM audio) plus a silent
+    // WebM preview that browsers can play.
+    if (generated_audio != nullptr && job.vid_gen.output_format != "webp") {
+        job.vid_gen.output_format = "avi";
+        std::vector<uint8_t> preview = create_video_from_sd_images_to_vector("webm", results.data(), num_results, output_fps,
+                                                                           job.vid_gen.output_compression, nullptr, "");
+        if (!preview.empty())
+            job.result_preview_b64 = base64_encode(preview);
+    }
+#endif
     std::vector<uint8_t> video_bytes = create_video_from_sd_images_to_vector(job.vid_gen.output_format,
                                                                              results.data(),
                                                                              num_results,
@@ -829,6 +870,7 @@ void async_job_worker(ServerRuntime& runtime) {
             job->status     = AsyncJobStatus::Generating;
             job->started_at = unix_timestamp_now_ms();
             update_job_progress(*job, "waiting");
+            LOG_INFO("job %s: started", job->id.c_str());
         }
 
         std::vector<std::string> output_images;
@@ -875,10 +917,16 @@ void async_job_worker(ServerRuntime& runtime) {
             finish_job_progress(*job);
             if (job->cancel_requested.load()) {
                 job->status        = AsyncJobStatus::Cancelled;
+                LOG_INFO("job %s: cancelled", job->id.c_str());
                 job->error_code    = "cancelled";
                 job->error_message = "job cancelled by client";
             } else if (ok) {
                 job->status                 = AsyncJobStatus::Completed;
+                const json placement        = current_placement();
+                if (job->summary.is_object())
+                    job->summary["device"] = placement["label"];
+                LOG_INFO("job %s: finished in %.1f s on %s", job->id.c_str(), (job->completed_at - job->started_at) / 1000.0,
+                         placement["label"].get<std::string>().c_str());
                 job->result_images_b64      = std::move(output_images);
                 job->result_generation_info = std::move(output_info);
                 job->result_media_b64       = std::move(output_media_b64);
@@ -890,6 +938,7 @@ void async_job_worker(ServerRuntime& runtime) {
                 job->error_message.clear();
             } else {
                 job->status        = AsyncJobStatus::Failed;
+                LOG_ERROR("job %s: failed: %s", job->id.c_str(), error_message.empty() ? "unknown generation error" : error_message.c_str());
                 job->error_code    = error_code;
                 job->error_message = error_message.empty() ? "unknown generation error" : error_message;
                 job->result_images_b64.clear();
@@ -902,5 +951,8 @@ void async_job_worker(ServerRuntime& runtime) {
 
             purge_expired_jobs(manager);
         }
+        // Job results stay immutable once completed, so they can be written without the manager lock.
+        if (job->status == AsyncJobStatus::Completed)
+            save_job_outputs(runtime, *job);
     }
 }

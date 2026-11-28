@@ -28,8 +28,17 @@ struct SDSvrParams {
     int weight_residency_ttl  = -1;
     std::string serve_html_path;
     std::string dgl_dir = "dgl";
+    std::string output_dir = "outputs";
+    std::string catalog_url = "https://raw.githubusercontent.com/forevion/forevion-sdcpp/master/examples/server/downloads.json";
     bool media_view = true;
     std::vector<std::string> model_dirs;
+    // Uploaded start images, references, audio and control frames are kept here; empty disables it.
+    std::string input_dir;
+    // JSON file with the models, inputs and outputs folders chosen in the Web UI. Its folders
+    // replace --model-dir, --input-dir and --output-dir; without it the Web UI cannot save folders.
+    std::string settings_file;
+    // The settings file names all three folders and they exist (otherwise the Web UI asks for them).
+    bool folders_configured = false;
     std::vector<std::string> api_keys;
     std::string api_key_file;
     std::vector<std::string> cors_origins;
@@ -129,6 +138,8 @@ struct VidGenJobRequest {
     int output_compression    = 100;
     std::string preview_mode  = "none";
     int preview_interval      = 1;
+    // >= 0: return only this frame of the clip as a PNG still (clamped to the last frame).
+    int still_frame = -1;
 
     SDOptPtr to_video_opt() { return gen_params.to_video_opt(); }
 };

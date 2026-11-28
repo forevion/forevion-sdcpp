@@ -85,6 +85,7 @@ static constexpr const char* scheduler_to_str[] = {
     "flux",
     "beta",
     "llada_image",
+    "piflow",
 };
 
 static_assert(SCHEDULER_COUNT == sizeof(scheduler_to_str) / sizeof(scheduler_to_str[0]),

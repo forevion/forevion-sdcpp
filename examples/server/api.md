@@ -95,6 +95,34 @@ model and its defaults when the job starts.
 | GET | `/sdcpp/v1/model-files` | `{files: [{id, name, category, root, relative_path}], errors: [...]}` |
 | POST | `/sdcpp/v1/models/refresh` | Rescan recipes and files; return `{errors: [...]}` |
 | GET | `/sdcpp/v1/models/status` | Current model configuration (`configured` or `empty`), recipe, components and revision |
+| GET | `/sdcpp/v1/jobs` | `{jobs: [...]}`: image and video jobs still held by the server, oldest first, without results or previews, each with a `summary` (prompt, size, frames, steps, recipe) |
+| GET | `/sdcpp/v1/outputs` | `{outputs: [...], total, enabled}`: saved results from `--output-dir`, newest first; `offset` and `limit` query parameters page the list |
+| GET | `/sdcpp/v1/outputs/files/{file}` | A saved image or video |
+| DELETE | `/sdcpp/v1/outputs/{file}` | Delete a saved result and its sidecar |
+| GET | `/sdcpp/v1/downloads` | `{packages: [...], errors, ram_gb, model_root}`: download packages with `installed`, `size`, `missing_bytes`, `components` and `status` (`state`, `detail`, `error`, `done_bytes`, `total_bytes`, `speed_bps`, `queue_position`) |
+| POST | `/sdcpp/v1/downloads/{id}` | Queue a package download (202) |
+| POST | `/sdcpp/v1/downloads/{id}/cancel` | Stop or unqueue a package download; partial files are kept for resuming |
+| DELETE | `/sdcpp/v1/downloads/{id}/files` | Delete a package's downloaded files (`{deleted: [...]}`); refused with 409 for files the loaded model uses |
+| GET | `/sdcpp/v1/downloads/{id}/definition` | `{package, source, overrides, editable}`: the full package for the editor |
+| PUT | `/sdcpp/v1/downloads/{id}` | Save a package as `<model-dir>/downloads/{id}.json` (an edited copy for built-in and online packages) |
+| DELETE | `/sdcpp/v1/downloads/{id}` | Remove a package saved by the UI, or undo edits to a built-in or online one; downloaded files stay |
+| POST | `/sdcpp/v1/download-catalog/refresh` | Re-read the online catalog; returns its `{state, url, error, checked}` status (also included as `catalog` in `GET /sdcpp/v1/downloads`) |
+| POST | `/sdcpp/v1/download-catalog/custom` | `{url, category, filename?, name?, dry_run?, start?}`: add one model file from a link as a `custom-*` package; Hugging Face links get size and SHA-256 from the Hub. `dry_run` only returns `{url, path, size, sha256, exists}` |
+| GET | `/sdcpp/v1/model-slots` | Input types (`{slots: [{id, label, categories}], categories}`) for config editors |
+| PUT | `/sdcpp/v1/recipes/{id}` | Validate and save a user recipe (model config) as `<model-dir>/recipes/{id}.json` |
+| DELETE | `/sdcpp/v1/recipes/{id}` | Delete a user recipe; built-in recipes cannot be deleted |
+| GET | `/sdcpp/v1/storage` | Model files with `size`, `modified`, `used_by` (recipes) and `loaded`, plus free and total bytes per model root |
+| DELETE | `/sdcpp/v1/model-files/{file id}` | Delete a model file; refused with 409 when the loaded model uses it |
+| GET | `/sdcpp/v1/config/backup` | One JSON file (`kind: sdcpp-studio-config`) with every user recipe and download package file |
+| POST | `/sdcpp/v1/config/restore` | `{backup, mode: merge \| replace}`: validate every entry, then write them (replace first removes current user recipes and packages); nothing changes when any entry is invalid |
+| GET | `/sdcpp/v1/inputs/files/{file}` | An uploaded input kept in `--input-dir` (`input-<hash>.png/.jpg/.webp/.wav`); saved results list them under `inputs` (`init_image`, `end_image`, `ref_images`, `ref_audios`, `control_frames`) |
+| GET | `/sdcpp/v1/system` | `{devices: [{name, description, type: gpu\|igpu\|accel\|cpu, memory_total, memory_free}], gpu_build, gpu_found, auto_fit, placement}`. `gpu_build` names the GPU backend shipped with the server (`cuda`, `vulkan`, ...; empty for CPU builds); `placement` says where the current model runs (`kind`: `gpu`, `cpu` or `mixed`, `label`, and per component its compute device and where its weights are). Finished jobs record the same `label` as `summary.device` |
+| GET | `/sdcpp/v1/settings/folders` | `{settings_file, can_save, needs_setup, can_browse, folders: {models, inputs, outputs: {path, exists}}, suggested}` |
+| PUT | `/sdcpp/v1/settings/folders` | `{models, inputs, outputs}` as full paths: create missing folders, save them in `--settings-file` and switch to them at once; 409 while jobs are queued or running |
+| GET | `/sdcpp/v1/settings/catalog` | `{url, can_save}`: the online catalog address |
+| PUT | `/sdcpp/v1/settings/catalog` | `{url}`: save a new `https://` catalog address in `--settings-file` (empty turns it off); call `download-catalog/refresh` to load it |
+| GET | `/sdcpp/v1/fs/dirs?path=` | `{path, parent, dirs: [{name, path}], roots, warning}`: subfolders of `path` (default: the home folder) without hidden and system folders. Only for requests from the server's own computer (403 otherwise) |
+| POST | `/sdcpp/v1/fs/mkdir` | `{path}`: create a folder (full path). Only for requests from the server's own computer |
 
 Example `POST /sdcpp/v1/img_gen` request with a model selection.
 
@@ -1435,6 +1463,7 @@ Compared with `img_gen`, the `vid_gen` request body:
 - `mask_image`, `control_image`, `control_strength`, `ip_adapter_image`, `ip_adapter_strength`, and `embed_image_metadata` are not part of the request schema
 - `ref_images` is accepted for MiniMax-H3 Ref2VA conditioning; other video model families currently ignore it
 - `vid_gen` adds `end_image`, `control_frames`, `high_noise_sample_params`, `video_frames`, `fps`, `moe_boundary`, and `vace_strength`
+- `vid_gen` accepts `still_frame` (integer, default `-1`): when zero or more, the job returns only that frame of the generated clip (clamped to the last frame) as a PNG with `mime_type` `image/png` and `frame_count` 1
 
 Example:
 
@@ -1686,6 +1715,10 @@ Output format behavior:
 - `webp` means animated WebP
 - `avi` means MJPG AVI
 - `webm` requires the server to be built with WebM support; otherwise the request returns `400`
+- when the model produces audio (it has an audio VAE) and `output_format` is not `webp`, the
+  server writes `avi` so the soundtrack is kept, because WebM output is silent. When the server
+  saves results (`--output-dir`), it also saves a silent `<name>-preview.webm` that browsers can
+  play; the saved item lists it as `preview_file` and `preview_url`, with `has_audio: true`
 
 ### Result Payload
 

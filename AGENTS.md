@@ -26,7 +26,7 @@ Agents must not:
 
 * Run `git push`, create PRs, or submit issue/PR comments on the user's behalf.
 * Create commits unless the user explicitly requests that specific commit.
-* Modify `ggml/`, `thirdparty/`, or `examples/server/frontend/` unless
+* Modify `ggml/` or `thirdparty/` unless
   explicitly requested and necessary.
 * Read large local model files or tokenizer vocabulary files.
 * Rewrite unrelated code for style-only reasons.
@@ -88,8 +88,8 @@ documentation.
 * `examples/server/` - server application built on top of the library.
   Before modifying built-in recipes, read and follow
   [the built-in recipe policy](examples/server/recipes/README.md).
-* `examples/server/frontend/` - git submodule containing independent frontend
-  code. Avoid modifying it unless explicitly requested.
+* `examples/server/frontend/` - the Web UI (Vue 3 + Vite) built into `sd-server`.
+  Run `pnpm run type-check` there after changing it.
 
 ### Documentation and Tooling
 

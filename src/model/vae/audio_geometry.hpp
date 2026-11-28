@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include <vector>
 
+#include "core/image_geometry.h"
 #include "model.h"
 
 namespace sd::vae {
@@ -21,6 +22,12 @@ namespace sd::vae {
         if (sd_version_is_minimax_h3(version)) {
             const auto length = std::max<int64_t>(1, std::llround(static_cast<double>(frames) * 40.0 / fps));
             return {length, 2, 32, 1};
+        }
+        if (sd_version_is_kandinsky6(version)) {
+            // MMAudio latents: 40 channels at 44.1 kHz / 1024 over the 4n+1-aligned frame count.
+            const auto aligned = sd::align_video_frame_count(frames, 4);
+            const auto length = static_cast<int64_t>(std::ceil(static_cast<double>(aligned) / fps * 44100.0 / 1024.0));
+            return {length, 40, 1};
         }
         throw std::invalid_argument("audio latent shape is not defined for this model family");
     }

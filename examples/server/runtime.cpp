@@ -1,4 +1,5 @@
 #include "runtime.h"
+#include "studio_settings.h"
 
 #include <algorithm>
 #include <cctype>
@@ -304,6 +305,10 @@ ArgOptions SDSvrParams::get_options() {
         {"-l", "--listen-ip", "server listen ip (default: 127.0.0.1)", 0, &listen_ip},
         {"", "--serve-html-path", "path to HTML file to serve at root (optional)", 0, &serve_html_path},
         {"", "--dgl-dir", "Web UI script directory (default: dgl)", 0, &dgl_dir},
+        {"", "--output-dir", "directory for finished images and videos shown in the Web UI history; \"none\" disables saving (default: outputs)", 0, &output_dir},
+        {"", "--input-dir", "directory where uploaded start images, references, audio and control frames are kept; \"none\" disables it (default: none)", 0, &input_dir},
+        {"", "--settings-file", "JSON file with the models, inputs and outputs folders chosen in the Web UI; the Web UI asks for them until they are set (optional)", 0, &settings_file},
+        {"", "--catalog-url", "online model download catalog for the Models page; \"none\" uses only the built-in and local lists (default: the forevion-sdcpp master catalog)", 0, &catalog_url},
     };
 
     options.int_options = {
@@ -376,6 +381,10 @@ bool SDSvrParams::validate() {
         LOG_ERROR("error: serve_html_path file does not exist: %s", serve_html_path.c_str());
         return false;
     }
+    if (output_dir == "none")
+        output_dir.clear();
+    if (catalog_url == "none")
+        catalog_url.clear();
     if (dgl_dir.empty()) {
         LOG_ERROR("--dgl-dir requires a directory path");
         return false;
@@ -384,6 +393,17 @@ bool SDSvrParams::validate() {
 }
 
 bool SDSvrParams::resolve_and_validate() {
+    if (input_dir == "none")
+        input_dir.clear();
+    apply_studio_settings(*this);
+    if (!model_dirs.empty())
+        LOG_INFO("models folder: %s", model_dirs.front().c_str());
+    if (!input_dir.empty())
+        LOG_INFO("inputs folder: %s", input_dir.c_str());
+    if (!output_dir.empty() && output_dir != "none")
+        LOG_INFO("outputs folder: %s", output_dir.c_str());
+    if (!settings_file.empty() && !folders_configured)
+        LOG_INFO("folders are not set up yet; choose them in the Web UI");
     return validate() && load_api_keys();
 }
 
@@ -399,6 +419,8 @@ std::string SDSvrParams::to_string() const {
         << "  weight_residency_ttl: " << weight_residency_ttl << ",\n"
         << "  serve_html_path: \"" << serve_html_path << "\",\n"
         << "  dgl_dir: \"" << dgl_dir << "\",\n"
+        << "  output_dir: \"" << output_dir << "\",\n"
+        << "  catalog_url: \"" << catalog_url << "\",\n"
         << "  api_keys: " << api_keys.size() << ",\n"
         << "  cors_origins: " << cors_origins.size() << ",\n"
         << "  media_view: " << std::boolalpha << media_view << ",\n"

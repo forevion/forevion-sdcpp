@@ -146,6 +146,11 @@ struct ZImageControlInput {
     float strength;
 };
 
+struct Kandinsky6DiffusionExtra {
+    int audio_length   = 0;
+    float target_sigma = NAN;
+};
+
 struct ZImageDiffusionExtra {
     const sd::Tensor<float>* control_latent         = nullptr;
     float strength                                  = 1.f;
@@ -168,7 +173,8 @@ using DiffusionExtraParams = std::variant<std::monostate,
                                           HunyuanVideoDiffusionExtra,
                                           LLaDAImageDiffusionExtra,
                                           MingImageDiffusionExtra,
-                                          ZImageDiffusionExtra>;
+                                          ZImageDiffusionExtra,
+                                          Kandinsky6DiffusionExtra>;
 
 struct DiffusionParams {
     const sd::Tensor<float>* x                        = nullptr;

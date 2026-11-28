@@ -1,62 +1,14 @@
 name: CI
 
 on:
+  # forevion fork: on demand only (Actions > CI > Run workflow). Packages for master
+  # pushes and pull requests come from studio-release.yml.
   workflow_dispatch: # allows manual triggering
     inputs:
       create_release:
         description: "Create new release"
         required: true
         type: boolean
-  push:
-    branches:
-      - master
-      - ci
-    paths:
-      [
-        ".github/workflows/**",
-        ".dockerignore",
-        "docs/dgl-builtins.md",
-        "docker/Dockerfile*",
-        "scripts/ci-cuda-cache.sh",
-        "**/CMakeLists.txt",
-        "**/Makefile",
-        "**/*.h",
-        "**/*.hpp",
-        "**/*.c",
-        "**/*.cpp",
-        "**/*.cu",
-        "**/*.cuh",
-        "ggml",
-        "examples/server/frontend",
-        "examples/server/frontend/**",
-        "examples/server/recipes/*.json",
-        "start-server.sh",
-        "start-server.bat",
-      ]
-  pull_request:
-    types: [opened, synchronize, reopened]
-    paths:
-      [
-        ".github/workflows/**",
-        ".dockerignore",
-        "docs/dgl-builtins.md",
-        "docker/Dockerfile*",
-        "scripts/ci-cuda-cache.sh",
-        "**/CMakeLists.txt",
-        "**/Makefile",
-        "**/*.h",
-        "**/*.hpp",
-        "**/*.c",
-        "**/*.cpp",
-        "**/*.cu",
-        "**/*.cuh",
-        "ggml",
-        "examples/server/frontend",
-        "examples/server/frontend/**",
-        "examples/server/recipes/*.json",
-        "start-server.sh",
-        "start-server.bat",
-      ]
 
 env:
   BRANCH_NAME: ${{ github.head_ref || github.ref_name }}
