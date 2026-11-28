@@ -55,6 +55,19 @@ export interface ModelFile {
     category: string;
 }
 
+export interface LoraFile {
+    name: string;
+    path: string;
+    display_path?: string;
+}
+
+// One entry of the request's structured `lora` array.
+export interface LoraEntry {
+    path: string;
+    multiplier: number;
+    is_high_noise?: boolean;
+}
+
 export interface JobProgress {
     stage: string;
     detail: string;
@@ -78,6 +91,7 @@ export interface JobSummary {
     fps?: number | null;
     recipe?: string;
     models?: Record<string, string>;
+    lora?: LoraEntry[];
     // Where the job ran, for example "GPU · NVIDIA L4" or "CPU".
     device?: string;
 }

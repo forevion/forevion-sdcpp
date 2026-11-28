@@ -184,6 +184,16 @@ json make_job_summary(const AsyncGenerationJob& job, const json& body) {
     } else {
         summary["recipe"] = "@current";
     }
+    if (auto loras = body.find("lora"); loras != body.end() && loras->is_array()) {
+        json entries = json::array();
+        for (const auto& item : *loras)
+            if (item.is_object() && item.contains("path") && item["path"].is_string())
+                entries.push_back({{"path", item["path"]},
+                                   {"multiplier", item.value("multiplier", 1.0f)},
+                                   {"is_high_noise", item.value("is_high_noise", false)}});
+        if (!entries.empty())
+            summary["lora"] = std::move(entries);
+    }
     return summary;
 }
 

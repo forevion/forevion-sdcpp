@@ -1,4 +1,4 @@
-import { buildRequest, currentRecipe, inputSupport, plan, recipeIsVideo, selectedFiles, state } from "./store";
+import { buildRequest, currentLoras, currentRecipe, inputSupport, loraEntries, loraInstalled, plan, recipeIsVideo, selectedFiles, state } from "./store";
 
 // sd-cli flag for each model input (slot) of a config.
 const SLOT_FLAGS: Record<string, string> = {
@@ -73,7 +73,11 @@ export function commandPreview(): CommandPreview | null {
     if (context.vae_format) add("--vae-format", context.vae_format);
     if (context.model_args) add("--model-args", context.model_args);
 
-    add("--prompt", form.prompt.trim() || "your prompt");
+    // sd-cli reads LoRAs from <lora:name:strength> tags in the prompt, relative to --lora-model-dir.
+    const loraTags = loraEntries.value.map((l) => `<lora:${l.is_high_noise ? "|high_noise|" : ""}${l.path}:${l.multiplier}>`);
+    if (loraTags.length) add("--lora-model-dir", modelPath(root, "loras", windows));
+    if (currentLoras.value.some((l) => !loraInstalled(l.path))) notes.push("LoRAs whose files are missing are left out.");
+    add("--prompt", [form.prompt.trim() || "your prompt", ...loraTags].join(" "));
     if (form.negativePrompt.trim()) add("--negative-prompt", form.negativePrompt.trim());
     add("--width", p.width);
     add("--height", p.height);

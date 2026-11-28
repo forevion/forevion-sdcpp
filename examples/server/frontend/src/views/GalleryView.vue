@@ -167,6 +167,12 @@ function when(ms: number) {
                     <dl class="facts">
                         <dt>Model</dt>
                         <dd>{{ state.recipes.find((r) => r.id === open!.recipe)?.name || open.recipe }}</dd>
+                        <template v-if="open.lora?.length">
+                            <dt>LoRAs</dt>
+                            <dd>
+                                <div v-for="(l, i) in open.lora" :key="i" class="mono">{{ l.path }} · {{ l.multiplier }}<template v-if="l.is_high_noise"> · high noise</template></div>
+                            </dd>
+                        </template>
                         <dt>Size</dt>
                         <dd>{{ open.width }}×{{ open.height }}</dd>
                         <template v-if="(open.frame_count || 1) > 1">

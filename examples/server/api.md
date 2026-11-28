@@ -92,10 +92,10 @@ model and its defaults when the job starts.
 | Method | Endpoint | Response / behavior |
 | --- | --- | --- |
 | GET | `/sdcpp/v1/recipes` | `{recipes: [...], errors: [...]}` |
-| GET | `/sdcpp/v1/model-files` | `{files: [{id, name, category, root, relative_path}], errors: [...]}` |
+| GET | `/sdcpp/v1/model-files` | `{files: [{id, name, category, root, relative_path}], errors: [...]}`; includes LoRA files (`category: loras`) from the model roots |
 | POST | `/sdcpp/v1/models/refresh` | Rescan recipes and files; return `{errors: [...]}` |
 | GET | `/sdcpp/v1/models/status` | Current model configuration (`configured` or `empty`), recipe, components and revision |
-| GET | `/sdcpp/v1/jobs` | `{jobs: [...]}`: image and video jobs still held by the server, oldest first, without results or previews, each with a `summary` (prompt, size, frames, steps, recipe) |
+| GET | `/sdcpp/v1/jobs` | `{jobs: [...]}`: image and video jobs still held by the server, oldest first, without results or previews, each with a `summary` (prompt, size, frames, steps, recipe, and `lora` when the request had LoRAs) |
 | GET | `/sdcpp/v1/outputs` | `{outputs: [...], total, enabled}`: saved results from `--output-dir`, newest first; `offset` and `limit` query parameters page the list |
 | GET | `/sdcpp/v1/outputs/files/{file}` | A saved image or video |
 | DELETE | `/sdcpp/v1/outputs/{file}` | Delete a saved result and its sidecar |

@@ -497,7 +497,12 @@ static void submit_generation_job(ServerRuntime& runtime, const httplib::Request
             res.set_content(json({{"error", error_message}}).dump(), "application/json");
             return;
         }
-        job->summary = make_job_summary(*job, requested_model.is_null() ? json::object() : json({{"model", requested_model}}));
+        json summary_source = json::object();
+        if (!requested_model.is_null())
+            summary_source["model"] = requested_model;
+        if (body.contains("lora"))
+            summary_source["lora"] = body["lora"];
+        job->summary = make_job_summary(*job, summary_source);
         if (json inputs = save_job_inputs(runtime, body); !inputs.empty())
             job->summary["inputs"] = std::move(inputs);
         if (model_lock.owns_lock()) {
