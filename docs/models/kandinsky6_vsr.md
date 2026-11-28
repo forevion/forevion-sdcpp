@@ -84,6 +84,23 @@ The prompt is ignored. The built-in `kandinsky6-vsr` recipe has the `diffusion_m
   is exact and bounds memory to four output frames per tile.
 - The encoder returns the posterior mean, so `posterior = "sample"` also gives the mean.
 
+## Speed and memory
+
+Measured on a 16-core Ryzen 9 9950X without a GPU, 2x, a 448x256 clip with 9 frames (two
+512x768 output tiles), bf16 transformer, f16 GGUF K-VAE, `scale=2` upscaler:
+
+| Stage | Time |
+| --- | --- |
+| K-VAE encode | 5.5 s |
+| Upscale and 2 PiFlow steps, per tile | about 21 s |
+| K-VAE decode, both tiles | 663 s |
+| Total through sd-server | 12 min 12 s, peak 13.5 GB RAM |
+
+On that machine, with about 13 GB of commit free, a full 512x768 decode graph did not fit. The
+VAE decode then retries with spatial tiling on its own (`Reducing VAE decode tiles`), which is
+slower and not bit-exact at the seams. A 512x512 tile with two latent frames decodes in about
+16 s when it fits. Machines with more free memory skip the fallback.
+
 ## Accuracy
 
 Each stage was compared with the diffusers pipeline (fp32 activations) on a 5-frame 256x256 clip
