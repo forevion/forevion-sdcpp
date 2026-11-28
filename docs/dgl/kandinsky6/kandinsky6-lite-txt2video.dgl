@@ -1,0 +1,51 @@
+# version: 0.0.0
+# docs/models/kandinsky6.md — Text-to-video example (Kandinsky 6.0 Lite, non-distilled, with CFG)
+
+var {
+    model_path = "../models/kandinsky-6.0-lite/transformer/diffusion_pytorch_model.safetensors"
+    text_path = "../models/kandinsky-6.0-lite/text_encoder"
+    clip_l_path = "../models/kandinsky-6.0-lite/text_encoder_2/model.safetensors"
+    tae_path = "../models/vae/taehv.safetensors"
+
+    output_path = "output.avi"
+
+    prompt = "A red fox trotting through a snowy pine forest at sunrise, soft golden light, cinematic."
+    negative_prompt = "Static, 2D cartoon, cartoon, 2d animation, paintings, images, worst quality, low quality, ugly, deformed, walking backwards"
+
+    seed = 42
+    rng_type = "cuda"
+    width = 864
+    height = 480
+    frames = 49
+    fps = 24
+    steps = 50
+    cfg_scale = 5.0
+}
+
+fn main() {
+    model = load_dit(model_path, family = "kandinsky6_flow", params_backend = "cpu")
+    text = load_text_encoder(text_path, family = "kandinsky6", params_backend = "cpu", clip_l_path = clip_l_path)
+    tae = load_tae(tae_path, family = "kandinsky6", params_backend = "cpu")
+
+    # Video and its synchronized audio are denoised together; the audio latent ([length, 40])
+    # rides in extra latent channels. This example decodes video only.
+    video_base = tensor::zeros(latent_shape(tae, width = width, height = height, frames = frames))
+    video_shape = tensor::shape(video_base)
+    audio_length = math::ceil(((video_shape[2] - 1) * 4 + 1) * 44100 / (fps * 1024))
+    audio_count = audio_length * 40
+    tail_channels = math::ceil_div(audio_count, video_shape[0] * video_shape[1] * video_shape[2])
+    base = tensor::concat([video_base, tensor::zeros([video_shape[0], video_shape[1], video_shape[2], tail_channels, 1])], axis = 3)
+
+    positive = predictor(model, encode_prompt(text, prompt, width = width, height = height), audio_length = audio_length, fps = fps)
+    negative = predictor(model, encode_prompt(text, negative_prompt, width = width, height = height), audio_length = audio_length, fps = fps)
+    pred = cfg(positive, negative, cfg_scale)
+    sigmas = make_sigmas(pred, latent = base, steps = steps, scheduler = "discrete")
+    rng = make_rng(rng_type, seed = seed)
+    start = add_noise(pred, base, tensor::randn_like(base, rng = rng), sigma = sigmas[0])
+    latent = sample(start, sigmas, predict = pred, method = "euler", rng = rng)
+
+    video_latent = latent[:, :, :, :video_shape[3]]
+    output_frames = vae_decode(tae, dit_to_vae_latents(tae, video_latent))
+    video::save(output_path, {frames = output_frames, fps_num = fps, fps_den = 1})
+    return {video = {frames = output_frames, fps_num = fps, fps_den = 1}, latent = latent, audio = {}}
+}

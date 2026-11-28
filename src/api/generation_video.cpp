@@ -107,6 +107,11 @@ namespace sd::api {
         const bool kandinsky = sd_version_is_kandinsky6(version);
         if (kandinsky && (first || last))
             throw dgl::Error(SD_STATUS_UNSUPPORTED, "Kandinsky 6 image-to-video is not supported yet");
+        // Like Kandinsky6TI2VAPipeline, guided non-distilled runs fall back to the release's negative prompt.
+        if (version == VERSION_KANDINSKY6_FLOW && request.image.sample_params.guidance.txt_cfg > 1.f &&
+            request.values.value("negative_prompt", std::string()).empty())
+            request.values["negative_prompt"] =
+                "Static, 2D cartoon, cartoon, 2d animation, paintings, images, worst quality, low quality, ugly, deformed, walking backwards";
         if (!h3 && !bound_videos(request.options, "ref_videos").empty())
             throw dgl::Error(SD_STATUS_UNSUPPORTED, "reference videos require MiniMax-H3");
         if (!h3 && !s2v && !bound_audios(request.options, "ref_audios").empty())
