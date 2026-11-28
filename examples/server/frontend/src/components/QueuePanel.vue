@@ -86,6 +86,7 @@ function describe(s: NonNullable<(typeof state.jobs)[number]["summary"]>) {
                         <span v-if="job.started && job.completed" class="faint small">{{ formatDuration((job.completed - job.started) / 1000) }}</span>
                     </div>
                     <p class="prompt">{{ job.summary?.prompt }}</p>
+                    <p v-if="job.summary?.device && job.status === 'completed'" class="faint small">Ran on {{ job.summary.device }}</p>
                     <p v-if="job.error && job.status === 'failed'" class="status-message status-message--error small">{{ job.error.message }}</p>
                 </article>
             </template>

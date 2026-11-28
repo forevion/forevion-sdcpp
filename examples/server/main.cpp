@@ -12,6 +12,7 @@
 #include "async_jobs.h"
 #include "common/common.h"
 #include "common/resource_owners.hpp"
+#include "device_info.h"
 #include "downloads.h"
 #include "library.h"
 #include "model_manager.h"
@@ -71,6 +72,7 @@ static void parse_args(int argc,
 
 void sd_log_cb(enum sd_log_level_t level, const char* log, void* data) {
     SDSvrParams* svr_params = (SDSvrParams*)data;
+    observe_sd_log(log);
     log_print(level, log, svr_params->log_level, svr_params->color);
 }
 
@@ -168,6 +170,7 @@ int main(int argc, const char** argv) {
     register_download_endpoints(svr, runtime);
     register_model_manager_endpoints(svr, runtime);
     register_studio_settings_endpoints(svr, runtime);
+    register_device_endpoints(svr, runtime);
 
     // Failed API requests show up in the terminal with the error the client received.
     svr.set_logger([](const httplib::Request& req, const httplib::Response& res) {

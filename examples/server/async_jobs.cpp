@@ -1,6 +1,7 @@
 // Extracted from main.cpp during server refactor.
 
 #include "async_jobs.h"
+#include "device_info.h"
 
 #include <algorithm>
 #include <chrono>
@@ -921,7 +922,11 @@ void async_job_worker(ServerRuntime& runtime) {
                 job->error_message = "job cancelled by client";
             } else if (ok) {
                 job->status                 = AsyncJobStatus::Completed;
-                LOG_INFO("job %s: finished in %.1f s", job->id.c_str(), (job->completed_at - job->started_at) / 1000.0);
+                const json placement        = current_placement();
+                if (job->summary.is_object())
+                    job->summary["device"] = placement["label"];
+                LOG_INFO("job %s: finished in %.1f s on %s", job->id.c_str(), (job->completed_at - job->started_at) / 1000.0,
+                         placement["label"].get<std::string>().c_str());
                 job->result_images_b64      = std::move(output_images);
                 job->result_generation_info = std::move(output_info);
                 job->result_media_b64       = std::move(output_media_b64);

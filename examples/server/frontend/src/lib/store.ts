@@ -3,7 +3,7 @@ import { computed, reactive, watch } from "vue";
 import { api } from "./api";
 import { availableTasks, producesAudio } from "./tasks";
 import type { TaskId } from "./tasks";
-import type { DownloadCatalog, Job, JobSummaryEntry, ModelFile, OutputEntry, Recipe } from "./types";
+import type { DownloadCatalog, Job, JobSummaryEntry, ModelFile, OutputEntry, Recipe, SystemInfo } from "./types";
 
 export type Aspect = "16:9" | "9:16" | "1:1" | "4:3" | "3:4";
 export type SizePreset = "small" | "normal";
@@ -70,6 +70,7 @@ export const state = reactive({
     lastCompleted: null as OutputEntry | null,
     createSelected: null as OutputEntry | null,
     queueOpen: false,
+    system: null as SystemInfo | null,
     // True until the first load of each list finishes, so pages can show a loader instead of "empty".
     loading: { catalog: true, outputs: true, downloads: true },
     // Optional input images as data URLs; kept in memory only (too large for local storage).
@@ -402,6 +403,15 @@ export async function loadCatalog(refresh = false) {
         state.error = String((error as Error).message || error);
     } finally {
         state.loading.catalog = false;
+    }
+}
+
+// Compute devices and where the loaded model runs; refreshed after jobs so a new placement shows.
+export async function loadSystem() {
+    try {
+        state.system = await api.system();
+    } catch {
+        state.system = null;
     }
 }
 

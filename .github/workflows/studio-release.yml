@@ -70,16 +70,18 @@ jobs:
           path: sdcpp-studio-linux-x64.tar.gz
 
   linux-cuda:
-    # NVIDIA GPUs. Built in the CUDA 12.8 image on Ubuntu 22.04 (glibc 2.35) for Turing (T4) to
-    # Blackwell (RTX 50, RTX PRO 6000); the CUDA runtime and cuBLAS are bundled, so the target
-    # machine only needs the NVIDIA driver (575 or newer for CUDA 12.8).
+    # NVIDIA GPUs. Built in the CUDA 12.8 image on Ubuntu 22.04 (glibc 2.35); the CUDA runtime and
+    # cuBLAS are bundled, so the target machine only needs the NVIDIA driver (575 or newer).
+    # Kernels for 7.5, 8.0, 9.0 and 12.0 cover Turing to Blackwell: 8.0 code also runs on 8.6
+    # and 8.9 (A10, A40, L4, L40S, RTX 30/40), and 12.0 on later 12.x GPUs. ccache keeps
+    # compiled kernels between runs, so only changed files are rebuilt.
     runs-on: ubuntu-22.04
     container: nvidia/cuda:12.8.1-devel-ubuntu22.04
     steps:
       - name: Tools
         run: |
           apt-get update
-          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates curl cmake ninja-build xz-utils
+          DEBIAN_FRONTEND=noninteractive apt-get install -y --no-install-recommends git ca-certificates curl cmake ninja-build xz-utils ccache
           git config --global --add safe.directory '*'
 
       - uses: actions/checkout@v6
@@ -95,12 +97,26 @@ jobs:
         with:
           version: 10.15.1
 
+      - name: Compiler cache
+        uses: actions/cache@v4
+        with:
+          path: .ccache
+          key: cuda-ccache-${{ github.run_id }}
+          restore-keys: cuda-ccache-
+
       - name: Build
+        env:
+          CCACHE_DIR: ${{ github.workspace }}/.ccache
+          CCACHE_MAXSIZE: 3G
+          CCACHE_COMPILERCHECK: content
         run: |
+          ccache --zero-stats
           cmake -S . -B build -G Ninja -DCMAKE_BUILD_TYPE=Release $CPU_PORTABLE \
-            -DSD_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES='75;80;86;89;90;120' \
+            -DSD_CUDA=ON -DCMAKE_CUDA_ARCHITECTURES='75;80;90;120' \
+            -DCMAKE_C_COMPILER_LAUNCHER=ccache -DCMAKE_CXX_COMPILER_LAUNCHER=ccache -DCMAKE_CUDA_COMPILER_LAUNCHER=ccache \
             -DCMAKE_BUILD_WITH_INSTALL_RPATH=ON -DCMAKE_INSTALL_RPATH='$ORIGIN'
           cmake --build build --target sd-server sd-cli -j "$(nproc)"
+          ccache --show-stats
 
       - name: Package
         run: |

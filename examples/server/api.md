@@ -116,6 +116,7 @@ model and its defaults when the job starts.
 | GET | `/sdcpp/v1/config/backup` | One JSON file (`kind: sdcpp-studio-config`) with every user recipe and download package file |
 | POST | `/sdcpp/v1/config/restore` | `{backup, mode: merge \| replace}`: validate every entry, then write them (replace first removes current user recipes and packages); nothing changes when any entry is invalid |
 | GET | `/sdcpp/v1/inputs/files/{file}` | An uploaded input kept in `--input-dir` (`input-<hash>.png/.jpg/.webp/.wav`); saved results list them under `inputs` (`init_image`, `end_image`, `ref_images`, `ref_audios`, `control_frames`) |
+| GET | `/sdcpp/v1/system` | `{devices: [{name, description, type: gpu\|igpu\|accel\|cpu, memory_total, memory_free}], gpu_build, gpu_found, auto_fit, placement}`. `gpu_build` names the GPU backend shipped with the server (`cuda`, `vulkan`, ...; empty for CPU builds); `placement` says where the current model runs (`kind`: `gpu`, `cpu` or `mixed`, `label`, and per component its compute device and where its weights are). Finished jobs record the same `label` as `summary.device` |
 | GET | `/sdcpp/v1/settings/folders` | `{settings_file, can_save, needs_setup, can_browse, folders: {models, inputs, outputs: {path, exists}}, suggested}` |
 | PUT | `/sdcpp/v1/settings/folders` | `{models, inputs, outputs}` as full paths: create missing folders, save them in `--settings-file` and switch to them at once; 409 while jobs are queued or running |
 | GET | `/sdcpp/v1/settings/catalog` | `{url, can_save}`: the online catalog address |

@@ -9,7 +9,7 @@ import QueuePanel from "./components/QueuePanel.vue";
 import { api } from "./lib/api";
 import { APP_NAME, logoSvg } from "./lib/brand";
 import { navigation } from "./lib/modelActions";
-import { activeJobs, enterCreate, loadCatalog, loadDownloads, loadOutputs, startPolling, state } from "./lib/store";
+import { activeJobs, enterCreate, formatBytes, loadCatalog, loadDownloads, loadOutputs, loadSystem, startPolling, state } from "./lib/store";
 import CreateView from "./views/CreateView.vue";
 import GalleryView from "./views/GalleryView.vue";
 import ModelsView from "./views/ModelsView.vue";
@@ -37,6 +37,22 @@ function go(next: Page) {
 }
 
 const runningCount = computed(() => activeJobs.value.length);
+// A finished job may have loaded a model with a new GPU/CPU placement.
+watch(runningCount, (now, before) => {
+    if (now < before) loadSystem();
+});
+
+const device = computed(() => {
+    const info = state.system;
+    if (!info) return null;
+    const gpus = info.devices.filter((d) => d.type === "gpu" || d.type === "igpu");
+    const lines = info.devices.map((d) => `${d.description || d.name}${d.memory_total ? ` · ${formatBytes(d.memory_total)}` : ""}`);
+    if (info.placement.kind !== "cpu") lines.unshift(`Model runs on: ${info.placement.label}`);
+    if (info.gpu_build && !info.gpu_found)
+        return { kind: "warn", label: "No GPU", title: `This is a ${info.gpu_build.toUpperCase()} build, but no GPU was found (is the NVIDIA driver installed?). Everything runs on the CPU.\n\n${lines.join("\n")}` };
+    if (gpus.length) return { kind: info.placement.kind === "mixed" ? "mixed" : "gpu", label: "GPU", title: lines.join("\n") };
+    return { kind: "cpu", label: "CPU", title: `No GPU in this build; everything runs on the CPU.\n\n${lines.join("\n")}` };
+});
 const logo = logoSvg;
 
 // The tab shows the page and how many jobs are running, so a background tab still tells you.
@@ -70,7 +86,7 @@ const needsSetup = ref(false);
 
 async function start() {
     if (page.value === "create") enterCreate();
-    await Promise.all([loadCatalog(), loadOutputs(), loadDownloads()]);
+    await Promise.all([loadCatalog(), loadOutputs(), loadDownloads(), loadSystem()]);
     startPolling();
 }
 
@@ -112,6 +128,7 @@ onMounted(async () => {
                 <i v-if="item.id === 'models' && downloading" class="dot" />
             </button>
             <div class="rail-spacer" />
+            <span v-if="device" class="device" :class="device.kind" :title="device.title" tabindex="0">{{ device.label }}</span>
             <button class="rail-item" type="button" :aria-pressed="state.queueOpen" @click="state.queueOpen = !state.queueOpen">
                 <Icon name="queue" :size="20" />
                 <span>Queue</span>
@@ -237,6 +254,30 @@ onMounted(async () => {
 
 .rail-spacer {
     flex: 1;
+}
+
+.device {
+    margin-bottom: 8px;
+    padding: 2px 8px;
+    border-radius: 999px;
+    background: var(--bg-hover);
+    color: var(--text-2);
+    font-size: 10px;
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    cursor: help;
+    white-space: nowrap;
+}
+
+.device.gpu {
+    color: var(--ok);
+    background: rgba(95, 211, 154, 0.12);
+}
+
+.device.mixed,
+.device.warn {
+    color: var(--warn);
+    background: rgba(240, 184, 92, 0.14);
 }
 
 .badge {

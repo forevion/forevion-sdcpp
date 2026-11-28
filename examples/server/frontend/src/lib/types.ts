@@ -78,6 +78,8 @@ export interface JobSummary {
     fps?: number | null;
     recipe?: string;
     models?: Record<string, string>;
+    // Where the job ran, for example "GPU · NVIDIA L4" or "CPU".
+    device?: string;
 }
 
 export interface Job {
@@ -269,6 +271,23 @@ export interface DglJob {
     queue_position: number;
     result: { type: string; outputs: DglOutput[]; media: DglMedia[] } | null;
     error: { code: string; message: string } | null;
+}
+
+export interface ComputeDevice {
+    name: string;
+    description: string;
+    type: "gpu" | "igpu" | "accel" | "cpu";
+    memory_total: number;
+    memory_free: number;
+}
+
+export interface SystemInfo {
+    devices: ComputeDevice[];
+    // GPU backend shipped with this build ("cuda", "vulkan", ...), empty for CPU-only builds.
+    gpu_build: string;
+    gpu_found: boolean;
+    auto_fit: boolean;
+    placement: { kind: "gpu" | "cpu" | "mixed"; label: string; components: { name: string; compute: string; params: string; params_mib: number }[] };
 }
 
 export type FolderKey = "models" | "inputs" | "outputs";

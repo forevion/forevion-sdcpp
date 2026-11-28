@@ -178,7 +178,7 @@ function when(ms: number) {
                         <dt>Seed</dt>
                         <dd class="mono">{{ open.seed }}</dd>
                         <dt>Render time</dt>
-                        <dd>{{ formatDuration(open.elapsed_ms / 1000) }}</dd>
+                        <dd>{{ formatDuration(open.elapsed_ms / 1000) }}<template v-if="open.device"> on {{ open.device }}</template></dd>
                         <dt>Created</dt>
                         <dd>{{ when(open.created) }}</dd>
                         <dt>File</dt>
