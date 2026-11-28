@@ -55,6 +55,8 @@ namespace Kandinsky6 {
 
         int64_t visual_in_channels() const { return visual_cond ? 2 * in_visual_dim + 1 : in_visual_dim; }
         int64_t n_grid() const { return out_visual_dim / in_visual_dim; }
+        // Distilled checkpoints predict n_grid PiFlow velocities per channel; the others one flow velocity.
+        bool is_piflow() const { return n_grid() > 1; }
 
         static Kandinsky6Config detect_from_weights(const String2TensorStorage& tensor_storage_map,
                                                     const std::string& prefix) {
@@ -97,13 +99,21 @@ namespace Kandinsky6 {
             config.time_dim_a          = ne("audio_time_embeddings.timestep_embedder.linear_2.weight", 1);
             config.ff_dim_a            = ne("visual_transformer_blocks.0.audio_dec_block.feed_forward.net.0.proj.weight", 1);
             config.head_dim            = ne("visual_transformer_blocks.0.video_dec_block.self_attention.query_norm.weight", 0);
+            const int64_t head_dim_a   = ne("visual_transformer_blocks.0.audio_dec_block.self_attention.query_norm.weight", 0);
             config.visual_token_types  = std::max<int64_t>(0, ne("visual_token_type_embeddings.weight", 1));
             config.cross_gates         = ne("visual_transformer_blocks.0.va_modulation.out_layer.weight", 1) ==
                                  2 * config.model_dim + config.model_dim_a;
 
-            if (config.model_dim <= 0 || config.num_visual_blocks <= 0 || config.model_dim_a <= 0 || config.head_dim != 64) {
+            // The video<->audio cross attention rotates audio keys with video RoPE (ca_rope), so both
+            // modalities must share one head size. Released checkpoints split it 1/4 : 3/8 : 3/8 over
+            // (t, h, w): Lite 64 -> {16, 24, 24}, Pro 128 -> {32, 48, 48}.
+            if (config.model_dim <= 0 || config.num_visual_blocks <= 0 || config.model_dim_a <= 0 ||
+                config.head_dim <= 0 || config.head_dim % 16 != 0 || head_dim_a != config.head_dim ||
+                config.model_dim % config.head_dim != 0 || config.model_dim_a % config.head_dim != 0) {
                 throw std::runtime_error("unsupported Kandinsky 6 transformer weights");
             }
+            config.axes_dims = {static_cast<int>(config.head_dim / 4), static_cast<int>(config.head_dim * 3 / 8),
+                                static_cast<int>(config.head_dim * 3 / 8)};
             config.in_visual_dim = config.out_visual_dim;
             for (int64_t channels = 1; channels <= vis_in; ++channels) {
                 if (2 * channels + 1 == vis_in && config.out_visual_dim % channels == 0) {
@@ -115,9 +125,13 @@ namespace Kandinsky6 {
             if (!config.visual_cond || !config.cross_gates) {
                 throw std::runtime_error("only Kandinsky 6 checkpoints with visual conditioning and cross gates are supported");
             }
+            if (config.out_audio_dim != config.n_grid() * config.in_audio_dim) {
+                throw std::runtime_error("Kandinsky 6 video and audio heads predict different grid sizes");
+            }
 
-            LOG_VERBOSE("kandinsky6: model_dim = %" PRId64 ", model_dim_a = %" PRId64 ", visual_blocks = %d, text_blocks = %d, n_grid = %" PRId64,
-                        config.model_dim, config.model_dim_a, config.num_visual_blocks, config.num_text_blocks, config.n_grid());
+            LOG_INFO("kandinsky6: model_dim = %" PRId64 ", head_dim = %" PRId64 ", visual_blocks = %d, text_blocks = %d, %s",
+                     config.model_dim, config.head_dim, config.num_visual_blocks, config.num_text_blocks,
+                     config.is_piflow() ? "PiFlow (distilled) output" : "flow velocity output");
             return config;
         }
     };
@@ -142,14 +156,33 @@ namespace Kandinsky6 {
         return ggml_ext_layer_norm(ctx, x, nullptr, nullptr, eps);
     }
 
+    // The reference keeps the time embeddings and modulations in fp32 (_keep_in_fp32_modules).
+    // Lite stores these weights as F32; Pro stores them as bf16 (9.4 GB). Converting them to F32 at
+    // load would double that and stop them from being memory-mapped, so they keep their stored type
+    // and are cast to F32 in the graph, which keeps the activations in fp32 as well.
+    class F32Linear : public Linear {
+    public:
+        F32Linear(int64_t in_features, int64_t out_features)
+            : Linear(in_features, out_features, true) {}
+
+        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
+            ggml_tensor* w = params["weight"];
+            if (w->type == GGML_TYPE_F32) {
+                return Linear::forward(ctx, x);
+            }
+            w = ggml_cast(ctx->ggml_ctx, w, GGML_TYPE_F32);
+            return ggml_add(ctx->ggml_ctx, ggml_mul_mat(ctx->ggml_ctx, w, x), params["bias"]);
+        }
+    };
+
     class Modulation : public GGMLBlock {
     public:
         Modulation(int64_t time_dim, int64_t out_dim) {
-            blocks["out_layer"] = std::make_shared<Linear>(time_dim, out_dim, true, true);
+            blocks["out_layer"] = std::make_shared<F32Linear>(time_dim, out_dim);
         }
 
         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* t) {
-            auto out_layer = std::dynamic_pointer_cast<Linear>(blocks["out_layer"]);
+            auto out_layer = std::dynamic_pointer_cast<F32Linear>(blocks["out_layer"]);
             return out_layer->forward(ctx, ggml_silu(ctx->ggml_ctx, t));
         }
     };
@@ -160,13 +193,13 @@ namespace Kandinsky6 {
     public:
         TimeEmbeddings(int64_t model_dim, int64_t time_dim)
             : model_dim(model_dim) {
-            blocks["timestep_embedder.linear_1"] = std::make_shared<Linear>(model_dim, time_dim, true, true);
-            blocks["timestep_embedder.linear_2"] = std::make_shared<Linear>(time_dim, time_dim, true, true);
+            blocks["timestep_embedder.linear_1"] = std::make_shared<F32Linear>(model_dim, time_dim);
+            blocks["timestep_embedder.linear_2"] = std::make_shared<F32Linear>(time_dim, time_dim);
         }
 
         ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* timesteps) {
-            auto linear_1 = std::dynamic_pointer_cast<Linear>(blocks["timestep_embedder.linear_1"]);
-            auto linear_2 = std::dynamic_pointer_cast<Linear>(blocks["timestep_embedder.linear_2"]);
+            auto linear_1 = std::dynamic_pointer_cast<F32Linear>(blocks["timestep_embedder.linear_1"]);
+            auto linear_2 = std::dynamic_pointer_cast<F32Linear>(blocks["timestep_embedder.linear_2"]);
             auto x        = ggml_ext_timestep_embedding(ctx, timesteps, static_cast<int>(model_dim));
             x             = ggml_silu(ctx->ggml_ctx, linear_1->forward(ctx, x));
             return linear_2->forward(ctx, x);
@@ -735,7 +768,7 @@ namespace Kandinsky6 {
                 throw std::runtime_error("Kandinsky 6 requires Qwen2.5-VL token embeddings and a CLIP-L pooled vector");
             }
             const auto* extra = diffusion_extra_as<Kandinsky6DiffusionExtra>(diffusion_params);
-            if (!std::isfinite(extra->target_sigma)) {
+            if (config.is_piflow() && !std::isfinite(extra->target_sigma)) {
                 throw std::runtime_error("Kandinsky 6 PiFlow sampling needs the step's target sigma; use the euler method");
             }
             const auto& x            = *diffusion_params.x;
@@ -751,7 +784,8 @@ namespace Kandinsky6 {
             const size_t audio_n     = static_cast<size_t>(audio_len * audio_dim);
             const float sigma        = diffusion_params.timesteps->data()[0] / 1000.f;
             const float sigma_target = extra->target_sigma;
-            if (channels < C || (channels - C) * spatial < static_cast<int64_t>(audio_n) || sigma <= sigma_target) {
+            if (channels < C || (channels - C) * spatial < static_cast<int64_t>(audio_n) ||
+                (config.is_piflow() && sigma <= sigma_target)) {
                 throw std::runtime_error("Kandinsky 6 latent does not match its audio length or schedule");
             }
 
@@ -776,10 +810,21 @@ namespace Kandinsky6 {
                 return {};
             }
 
-            const int64_t n_grid = config.n_grid();
-            const float dt_inv   = 1.f / (sigma - sigma_target);
             sd::Tensor<float> result(x.shape());
             std::fill_n(result.data(), static_cast<size_t>(result.numel()), 0.f);
+            if (!config.is_piflow()) {
+                // Plain flow velocity: video [W, H, T, C] as is, audio [C_audio, L] -> packed [L, C_audio].
+                std::copy_n(out.video.data(), video_n, result.data());
+                for (int64_t c = 0; c < audio_dim && audio_n > 0; ++c) {
+                    for (int64_t l = 0; l < audio_len; ++l) {
+                        result.data()[video_n + static_cast<size_t>(c * audio_len + l)] = out.audio.data()[l * audio_dim + c];
+                    }
+                }
+                return result;
+            }
+
+            const int64_t n_grid = config.n_grid();
+            const float dt_inv   = 1.f / (sigma - sigma_target);
 
             std::vector<const float*> grid;
             for (int64_t g = 0; g < n_grid; ++g) {
