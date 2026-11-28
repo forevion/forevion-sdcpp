@@ -103,6 +103,35 @@ browser shows the cloud machine's folders. Rough GPU memory needs: Wan 5B and th
 Q4_K_M models fit in 24 GB; Wan 2.2 A14B (two experts) and Kandinsky 6 Pro work best with
 48 GB or more. Do not use `--lan` on a public machine: the server has no login.
 
+Cloud GPU containers (RunPod, Vast.ai, ...) usually log you in as `root` without `sudo`;
+the script then installs missing packages with `apt-get` directly.
+
+**RunPod, step by step.** Only the volume survives when a pod is removed, so keep
+everything on it:
+
+1. Create a **network volume** (150 GB is enough for several models; billed per GB-month
+   whether or not a pod runs) in the region where you want GPUs.
+2. Deploy a pod on it with an Ubuntu 22.04+ image that has CUDA 12.8 or newer (for example
+   RunPod's PyTorch template), the volume mounted at `/workspace`, and **SSH over exposed
+   TCP** turned on (the simpler proxied SSH cannot forward ports).
+3. In the pod's terminal:
+
+   ```sh
+   mkdir -p /workspace/sdcpp && cd /workspace/sdcpp
+   curl -fLO https://raw.githubusercontent.com/forevion/forevion-sdcpp/develop/scripts/setup-sdcpp.sh
+   chmod +x setup-sdcpp.sh
+   ./setup-sdcpp.sh --no-browser
+   ```
+
+4. On your computer, open the tunnel with the SSH command RunPod shows for the exposed TCP
+   port, adding `-L 1234:127.0.0.1:1234`, and open <http://127.0.0.1:1234>.
+5. On the first start choose `/workspace/models`, `/workspace/inputs` and
+   `/workspace/outputs` as the folders.
+
+Next time, deploy a pod on the same volume and run `/workspace/sdcpp/setup-sdcpp.sh
+--no-browser` again: the app, the folders setting and the models are already there.
+Terminate the pod when you are done; a stopped pod keeps charging for its own disk.
+
 **Building from source.** `--from-source` clones the `develop` branch into
 `stable-diffusion.cpp/` and builds it for this exact CPU instead: it installs Git, CMake,
 Ninja and the compiler with apt, downloads Node.js and pnpm into `tools/` for the Web UI,

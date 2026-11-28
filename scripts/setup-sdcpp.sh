@@ -145,9 +145,17 @@ apt_install() {
     [[ $# -gt 0 ]] || return 0
     command -v apt-get >/dev/null 2>&1 ||
         die "missing: $*. Install them with your package manager and run this script again."
-    warn "installing $* (asks for your password)"
-    sudo apt-get update
-    sudo apt-get install -y "$@" ca-certificates
+    # Cloud GPU containers (RunPod, Vast.ai, ...) run as root and often have no sudo.
+    local -a as_root=()
+    if [[ $EUID -ne 0 ]]; then
+        command -v sudo >/dev/null 2>&1 || die "missing: $*. Install them as root (apt-get install $*) and run this script again."
+        as_root=(sudo)
+        warn "installing $* (asks for your password)"
+    else
+        warn "installing $*"
+    fi
+    "${as_root[@]}" apt-get update
+    "${as_root[@]}" env DEBIAN_FRONTEND=noninteractive apt-get install -y "$@" ca-certificates
 }
 
 require_commands() {
