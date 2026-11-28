@@ -92,6 +92,7 @@ API and command-line option may change frequently.***
     - [LTX-2.3/LTX-2.5](./docs/models/ltx2.md)
     - [HunyuanVideo 1.5](./docs/models/hunyuan_video.md)
     - [Kandinsky 6](./docs/models/kandinsky6.md)
+    - [Kandinsky 6 VSR](./docs/models/kandinsky6_vsr.md)
     - [LingBot-Video](./docs/models/lingbot_video.md)
   - Video Upscale Models
     - [RelayVSR](./docs/models/relay_vsr.md)

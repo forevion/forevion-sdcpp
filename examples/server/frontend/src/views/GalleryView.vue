@@ -16,6 +16,7 @@ import {
     recipeIsVideo,
     remainingSeconds,
     reuse,
+    upscaleOutput,
     stageLabels,
     state,
     submit,
@@ -55,6 +56,25 @@ async function generate() {
         await submit();
     } finally {
         submitting.value = false;
+    }
+}
+
+const upscaling = ref(false);
+const upscaleError = ref("");
+
+async function upscale(output: OutputEntry) {
+    upscaling.value = true;
+    upscaleError.value = "";
+    try {
+        upscaleError.value = await upscaleOutput(output);
+        if (!upscaleError.value) {
+            open.value = null;
+            emit("open-create");
+        }
+    } catch (error) {
+        upscaleError.value = `Cannot read this video: ${(error as Error).message}`;
+    } finally {
+        upscaling.value = false;
     }
 }
 
@@ -192,9 +212,13 @@ function when(ms: number) {
                     </dl>
                     <div class="lb-actions">
                         <button class="btn" type="button" @click="reuseAndEdit(open)"><Icon name="reuse" :size="16" />Reuse settings</button>
+                        <button v-if="open.mime_type.startsWith('video/') && (open.frame_count || 2) > 1" class="btn-secondary" type="button" :disabled="upscaling" title="Open this clip in Create's Upscale video task" @click="upscale(open)">
+                            <span v-if="upscaling" class="spin" aria-hidden="true" /><Icon v-else name="sparkles" :size="16" />Upscale
+                        </button>
                         <a class="btn-secondary" :href="open.url" :download="open.file"><Icon name="download" :size="16" />Save</a>
                         <button class="btn-ghost btn-danger" type="button" @click="remove(open)"><Icon name="trash" :size="16" />Delete</button>
                     </div>
+                    <p v-if="upscaleError" class="status-message status-message--error">{{ upscaleError }}</p>
                 </aside>
             </div>
         </div>

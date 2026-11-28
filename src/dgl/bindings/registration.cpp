@@ -11,6 +11,7 @@
 #include "dgl/bindings/detailer.h"
 #include "dgl/bindings/detections.h"
 #include "dgl/bindings/image.h"
+#include "dgl/bindings/kandinsky6_vsr.h"
 #include "dgl/bindings/latents.h"
 #include "dgl/bindings/lora.h"
 #include "dgl/bindings/media.h"
@@ -449,7 +450,7 @@ namespace sd::dgl {
         registry["pulid::load"]          = component_loader<models::PuLID>(family, load_pulid);
         registry["animatediff::load"]    = component_loader<models::AnimateDiff>(family, load_animatediff);
         registry["load_latent_upscaler"] = component_loader<models::LatentUpscaler>(
-            choice("family", {"auto", "ltxav", "minimax_h3"}, "auto"), load_latent_upscaler);
+            choice("family", {"auto", "ltxav", "minimax_h3", "kandinsky6_vsr", "kandinsky6_vsr_5s"}, "auto"), load_latent_upscaler);
         registry["pulid::load_embedding"] = make_operation(
             {required("path", Kind::String)}, {Kind::Tensor}, execute_load_pulid_embedding);
         registry["photomaker::encode_images"] = make_operation(
@@ -659,6 +660,22 @@ namespace sd::dgl {
     }
 
     static void register_video_restoration_operations(Registry& registry) {
+        registry["kandinsky6_vsr::plan"] = make_operation(
+            {integer("width", 1, 16384), integer("height", 1, 16384), number("scale", 2, 4, 2.25), number("min_overlap", 0, 0.95, 0.2)},
+            {
+                {Kind::Dict},
+                {
+                    {"width", {Kind::Integer}},
+                    {"height", {Kind::Integer}},
+                    {"factor", {Kind::Integer}},
+                    {"tile_width", {Kind::Integer}},
+                    {"tile_height", {Kind::Integer}},
+                    {"tiles", {{Kind::List, Kind::Dict}, {{"x", {Kind::Integer}}, {"y", {Kind::Integer}}}}},
+                },
+            },
+            kandinsky6_vsr_plan);
+        registry["kandinsky6_vsr::blend"] = make_operation(
+            {list_argument("tiles", Kind::Tensor), required("plan", Kind::Dict)}, {Kind::Tensor}, kandinsky6_vsr_blend);
         registry["seedvr2::positive_embedding"] = make_operation(
             {required("dit", Kind::Denoiser)}, {Kind::Tensor}, seedvr2_positive_embedding);
         registry["relayvsr::positive_embedding"] = make_operation(

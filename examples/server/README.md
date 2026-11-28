@@ -241,7 +241,7 @@ Choose **Latest (develop)** to get such edits before they are released.
 
 The built-in list has FastWan 2.2 5B, Wan 2.2 TI2V 5B, Wan 2.2 T2V / I2V A14B, Wan 2.2 S2V
 14B, Wan 2.1 T2V 1.3B / 14B, Wan 2.1 I2V 14B (480p and 720p), Wan 2.1 FLF2V 14B, Wan 2.1
-VACE 1.3B / 14B and Kandinsky 6.0 Lite. The 14B models use Q4_K_M files (about 10 GB each)
+VACE 1.3B / 14B, Kandinsky 6.0 Lite and the Kandinsky 6.0 VSR 2.0 / 5s video upscalers. The 14B models use Q4_K_M files (about 10 GB each)
 so they fit in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
 
 Downloads never create variants by themselves. Files placed by hand in the category
@@ -257,7 +257,8 @@ folders (see [Model directories](#model-directories)) work the same way after a 
    model cannot do are dashed. Clicking one says why and lists the ready models that can
    (with a **Use** button) and the model types to download or add. The tasks are text to
    video, image to video, speech to video (lip sync), character to video (keep a person or
-   object from a picture, for example with Wan 2.1 VACE), video to video, text to image,
+   object from a picture, for example with Wan 2.1 VACE), video to video, upscale video
+   (Kandinsky 6.0 VSR), text to image,
    image to image, image edit, and text to audio, which no stable-diffusion.cpp model can
    do yet.
 3. Add the inputs the task needs under **Inputs**: a start image (optional for some
@@ -270,6 +271,16 @@ folders (see [Model directories](#model-directories)) work the same way after a 
    elapsed time and time left; **Stop** cancels it. More jobs wait in the **Queue**.
 6. The result appears in the preview with **Reuse**, **Save**, **Delete** and close
    buttons, and in the **Recent** strip.
+
+#### Upscale a video
+
+With a Kandinsky 6.0 VSR variant, Create offers only **Upscale video**. Choose a clip (it
+is read at its own size, rounded down to 16 pixels and at most 1024 on the long side, up
+to 121 frames at the FPS under **More settings**) and a factor: **2x**, **2.25x** or **4x**.
+No prompt is needed. In the **Gallery**, the **Upscale** button on a video opens it in this
+task directly. At 2x the clip must be at least 256 pixels on its short side (128 at 4x).
+On a CPU a 448x256, 17-frame clip takes a few minutes; see the
+[model guide](../../docs/models/kandinsky6_vsr.md) for memory and speed.
 
 The inputs of each job are kept in the inputs folder (one file per distinct image or
 clip), and **Reuse** puts them back into the form together with the prompt and settings.

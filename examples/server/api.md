@@ -216,6 +216,7 @@ Default-enabled features are `img2img`, `mask_image`, `lora`, `vae_tiling`,
 | `ip_adapter` | IP-Adapter image and strength |
 | `init_image`, `end_image` | Video start/end frames |
 | `control_frames`, `vace` | Video control frames and VACE strength |
+| `video_upscale` | Upscale-video task: `control_frames` are the clip to upscale and no prompt is needed (Kandinsky 6 VSR) |
 | `high_noise` | High-noise pass, MoE boundary and high-noise LoRAs |
 | `lora`, `vae_tiling` | LoRA overrides and VAE tiling |
 | `cache`, `cache_unet`, `cache_dit` | Cache panel and architecture-specific algorithms |
@@ -354,6 +355,7 @@ TAE slot.
 | `clip_vision` | `clip_vision` |
 | `llm_vision` | `text_encoders` or `clip_vision` |
 | `vae`, `audio_vae` | `vae` |
+| `latent_upscaler` | `latent_upscale_models` |
 | `tae` (legacy alias: `taesd`) | `vae` or `vae_approx` |
 | `tokenizer` | `tokenizers` |
 | `control_net` | `controlnet` |
@@ -1559,6 +1561,10 @@ Example:
 - Images retain request order and correspond to `<Picture 1>`, `<Picture 2>`, and so on in the prompt.
 - For MiniMax-H3, non-empty `ref_images` cannot be combined with `init_image` or `end_image`. A conflicting API request fails during generation; the WebUI checks this before submission.
 - MiniMax-H3 does not support `control_frames`; leave that array empty.
+- Kandinsky 6 VSR upscales `control_frames`: send the clip at its own size and set
+  `width` to 2x, 2.25x or 4x its width (the closest of the three is used; height follows the
+  clip). The prompt is ignored, frames beyond the last `4n+1` are dropped, and the recipe
+  needs a `latent_upscaler` file. Context `model_args` `variant=5s` selects the 5s checkpoint.
 - Other video model families currently ignore `ref_images`.
 - `features_by_mode.vid_gen` does not currently advertise `ref_images`; its absence is not an indication that MiniMax-H3 reference images are unsupported.
 

@@ -94,9 +94,40 @@ namespace sd::api {
         request.fields["high_model"] = high;
     }
 
+    // Kandinsky 6 VSR upscales the control frames; width and height choose the 2x, 2.25x or 4x route.
+    static void prepare_vsr_program(GenerationTemplate& request) {
+        const auto& settings = request.context.model.config.context;
+        const auto* frames   = bound_tensor(request.options, "control_frames");
+        if (!frames)
+            throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "Kandinsky 6 VSR upscales a video; pass it as control_frames");
+        if (!settings.latent_upscaler_path || !*settings.latent_upscaler_path)
+            throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "Kandinsky 6 VSR requires latent_upscaler_path");
+        for (const char* key : {"init_image", "end_image"})
+            if (bound_tensor(request.options, key))
+                throw dgl::Error(SD_STATUS_UNSUPPORTED, "Kandinsky 6 VSR takes only a video");
+        const double ratio = double(request.values.at("width").get<int64_t>()) / double(std::max<int64_t>(1, sd_tensor_dim(frames, 1)));
+        double scale       = 2.0;
+        for (double candidate : {2.25, 4.0})
+            if (std::abs(ratio - candidate) < std::abs(ratio - scale))
+                scale = candidate;
+        if (std::abs(ratio - scale) > 0.1 * scale)
+            throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "Kandinsky 6 VSR output width must be 2x, 2.25x or 4x the video width");
+        bind_tensor(request.program, "control_video", frames);
+        request.values["vsr_scale"]            = scale;
+        request.values["latent_upscaler_path"] = settings.latent_upscaler_path;
+        auto upscaler                          = loader_options(settings, SDBackendModule::DIFFUSION, request.definition);
+        upscaler["model_args"]                 = scale == 4.0 ? "scale=4" : "scale=2";
+        request.fields["upscaler_options"]     = arguments(upscaler);
+        request.fields["entry"]                = "video_vsr";
+    }
+
     void prepare_video_program(GenerationTemplate& request) {
         const auto version   = request.definition.version;
         const auto& settings = request.context.model.config.context;
+        if (sd_version_is_kandinsky6_vsr(version)) {
+            prepare_vsr_program(request);
+            return;
+        }
         const bool first     = keyframe(request, "init_image", "first_frame");
         const bool last      = keyframe(request, "end_image", "last_frame");
         const bool vace      = request.context.model.wan_vace;

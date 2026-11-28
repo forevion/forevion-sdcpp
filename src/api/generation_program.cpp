@@ -170,6 +170,8 @@ namespace sd::api {
                     text_path = path;
                     break;
                 }
+        if (text_path.empty() && sd_version_is_kandinsky6_vsr(definition.version))
+            text_path = primary;  // text-free: the VSR template loads no text encoder
         if (text_path.empty())
             throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "a checkpoint or text encoder path is required");
         const bool mandatory_tae = definition.version == VERSION_SDXS_512_DS || definition.version == VERSION_SDXS_09;

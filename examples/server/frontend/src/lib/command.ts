@@ -18,6 +18,7 @@ const SLOT_FLAGS: Record<string, string> = {
     taesd: "--tae",
     audio_vae: "--audio-vae",
     audio_encoder: "--audio-encoder",
+    latent_upscaler: "--latent-upscaler",
     embeddings_connectors: "--embeddings-connectors",
     control_net: "--control-net",
 };

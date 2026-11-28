@@ -88,6 +88,12 @@ namespace sd::api {
                         if (ends_with(name, "decoder.proj_out.weight") && tensor.ne[1] == 768)
                             detected = VERSION_P_H3_IMAGE;
                 }
+                // The VSR checkpoints share their weight layout; model_args variant=5s selects the 5s release.
+                if (detected == VERSION_KANDINSKY6_VSR)
+                    for (const auto& [key, value] : parse_key_value_args(text(settings.model_args), "model arg"))
+                        if (key == "variant")
+                            detected = value == "5s" ? VERSION_KANDINSKY6_VSR_5S : value == "2.0" ? VERSION_KANDINSKY6_VSR
+                                                                                               : throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "Kandinsky 6 VSR variant must be 2.0 or 5s");
                 const auto* definition = find_model_definition(detected);
                 if (!definition)
                     throw dgl::Error(SD_STATUS_UNSUPPORTED, "unsupported model family");

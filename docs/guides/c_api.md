@@ -426,6 +426,7 @@ For SDXL's bundled VAE (no `vae_path`), generation emits
 | `high_noise_diffusion_model_path` | `string` | context |
 | `image` | `tensor` | upscale |
 | `init_image` | `tensor` | image, video |
+| `latent_upscaler_path` | `string` | context |
 | `linear_scale` | `float` | context |
 | `llm_path` | `string` | context |
 | `llm_vision_path` | `string` | context |

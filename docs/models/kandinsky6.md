@@ -1,5 +1,7 @@
 # Kandinsky 6
 
+For the video super-resolution checkpoints, see [Kandinsky 6 VSR](kandinsky6_vsr.md).
+
 Kandinsky 6.0 generates video together with synchronized audio from text. This integration supports
 text-to-video with the Qwen2.5-VL 7B and CLIP-L text encoders, decoded with the HunyuanVideo VAE or the
 TAEHV tiny decoder. The audio latent is denoised together with the video, as the model requires, but is

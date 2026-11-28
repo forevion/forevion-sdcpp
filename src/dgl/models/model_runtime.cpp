@@ -22,6 +22,7 @@
 #include "model/diffusion/control.hpp"
 #include "model/diffusion/z_image.hpp"
 #include "model/upscaler/h3_latent_upscaler.hpp"
+#include "model/upscaler/kandinsky6_latent_upscaler.hpp"
 #include "model/upscaler/ltx_latent_upscaler.hpp"
 #include "model/vae/audio_vae.hpp"
 #include "model/vae/vae.hpp"
@@ -510,6 +511,7 @@ namespace sd::dgl::models {
     template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<::AnimateDiff::MotionRunner>&, size_t*);
     template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<H3VUpsampler::H3LatentUpscalerRunner>&, size_t*);
     template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<LTXVUpsampler::LatentUpsamplerRunner>&, size_t*);
+    template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<Kandinsky6Upscaler::UpscalerRunner>&, size_t*);
     template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<::IPAdapter::IPAdapterRunner>&, size_t*);
     template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<FrozenCLIPVisionEmbedder>&, size_t*);
     template bool ModelRuntime::register_runner_params(ModelComponent, const std::shared_ptr<Wav2Vec2::Wav2Vec2ModelRunner>&, size_t*);

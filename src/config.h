@@ -85,6 +85,7 @@ namespace sd {
         const char* audio_vae_path{};
         const char* audio_encoder_path{};
         const char* taesd_path{};
+        const char* latent_upscaler_path{};
         const char* control_net_path{};
         const sd_embedding_t* embeddings{};
         uint32_t embedding_count{};

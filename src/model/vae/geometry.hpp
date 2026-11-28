@@ -26,7 +26,8 @@ namespace sd::vae {
             return 32;
         if (version == VERSION_WAN2_2_TI2V || version == VERSION_QWEN_IMAGE_2_1 ||
             sd_version_is_hunyuan_video(version) || sd_version_is_mage_flow(version) ||
-            sd_version_is_minimax_h3(version) || sd_version_uses_flux2_vae(version))
+            sd_version_is_minimax_h3(version) || sd_version_uses_flux2_vae(version) ||
+            sd_version_is_kandinsky6_vsr(version))
             return 16;
         if (version == VERSION_CHROMA_RADIANCE || version == VERSION_HIDREAM_O1 ||
             sd_version_is_minit2i(version) || sd_version_is_sensenova_u1(version) ||
@@ -43,7 +44,8 @@ namespace sd::vae {
         if (sd_version_is_ltxav(version))
             return int(sd::align_video_frame_count(frames, 8));
         if (sd_version_is_wan(version) || sd_version_is_lingbot_video(version) ||
-            sd_version_is_hunyuan_video(version) || version == VERSION_SEEDVR2 || sd_version_is_kandinsky6(version))
+            sd_version_is_hunyuan_video(version) || version == VERSION_SEEDVR2 || sd_version_is_kandinsky6(version) ||
+            sd_version_is_kandinsky6_vsr(version))
             return int(sd::align_video_frame_count(frames, 4));
         return frames;
     }

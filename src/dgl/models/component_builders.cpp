@@ -22,6 +22,7 @@
 #include "model/vae/mage_vae.hpp"
 #include "model/vae/minimax_h3_audio_vae.hpp"
 #include "model/vae/minimax_h3_vae.hpp"
+#include "model/vae/kandinsky6_kvae.hpp"
 #include "model/vae/seedvr2_vae.hpp"
 #include "model/vae/tae.hpp"
 #include "model/vae/vae.hpp"
@@ -112,6 +113,10 @@ namespace sd::dgl::models::component_builders {
         auto create_vae = [&]() -> std::shared_ptr<::VAE> {
             if (vae_version == VERSION_RELAY_VSR) {
                 return build_relay_vsr_vae(ctx, loader);
+            } else if (sd_version_is_kandinsky6_vsr(vae_version)) {
+                return std::make_shared<Kandinsky6KVAE::KVAERunner>(ctx.backends.runtime_backend(SDBackendModule::VAE),
+                                                                   tensor_storage_map, weight_manager, vae_version,
+                                                                   tensor_storage_map.count("first_stage_model.decoder.conv_in.conv.weight") ? "first_stage_model" : "");
             } else if (vae_version == VERSION_SEEDVR2) {
                 const char* prefix = tensor_storage_map.count("first_stage_model.encoder.conv_out.bias") ? "first_stage_model" : "vae";
                 return std::make_shared<SeedVR2::SeedVR2VAERunner>(ctx.backends.runtime_backend(SDBackendModule::VAE),

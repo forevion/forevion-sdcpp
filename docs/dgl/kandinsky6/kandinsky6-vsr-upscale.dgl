@@ -1,0 +1,67 @@
+# version: 0.0.0
+# docs/models/kandinsky6_vsr.md — Upscale a video (Kandinsky 6.0 VSR, distilled 2 steps)
+
+var {
+    dit_path = "../models/diffusion_models/kandinsky6-vsr-2.0-bf16.gguf"
+    vae_path = "../models/vae/kandinsky6-vsr-kvae-f16.gguf"
+    upscaler_path = "../models/latent_upscale_models/kandinsky6-vsr-latent-upscaler-bf16.gguf"
+    # kandinsky6_vsr (VSR-2.0, flow shift 5) or kandinsky6_vsr_5s (VSR-5s, flow shift 3.5)
+    family = "kandinsky6_vsr"
+
+    input_path = "input.mp4"
+    output_path = "upscaled.avi"
+
+    # 2, 2.25 (a 1.125x bilinear pre-upscale, then 2x) or 4
+    scale = 2.25
+    steps = 2
+    min_overlap = 0.2
+    max_frames = 0
+    seed = 42
+    # Variance-preserving mix of the low-resolution latent: signal = sqrt(1 - noise^2)
+    noise = 0.7
+    signal = 0.714142842854285
+}
+
+fn prepare(frames, plan, count) {
+    planar = tensor::div(tensor::permute(tensor::cast(frames, "f32"), axes = [1, 2, 3, 0]), 255.0)
+    resized = tensor::clamp(tensor::interpolate(planar, [plan.width, plan.height], mode = "bilinear"), min = 0, max = 1)
+    return tensor::reshape(resized, [plan.width, plan.height, count, 3, 1])
+}
+
+fn refine_tile(tile, latent, plan, dit, upscaler, rng, steps, noise, signal) {
+    tile_w = math::floor(plan.tile_width / 16)
+    tile_h = math::floor(plan.tile_height / 16)
+    low = tensor::crop(latent, axes = [0, 1], start = [math::floor(tile.x / 16), math::floor(tile.y / 16)], size = [tile_w, tile_h])
+    upscaled = upscale_latent(upscaler, low, width = tile_w * plan.factor, height = tile_h * plan.factor)
+    start = tensor::add(tensor::affine(upscaled, scale = signal), tensor::affine(tensor::randn_like(upscaled, rng = rng), scale = noise))
+    pred = predictor(dit, {})
+    sigmas = make_sigmas(pred, latent = start, steps = steps, scheduler = "piflow")
+    return sample(start, sigmas, predict = pred, method = "euler", rng = rng)
+}
+
+fn decode_tile(latent, vae) {
+    return vae_decode(vae, dit_to_vae_latents(vae, latent), dtype = "f32")
+}
+
+fn main() {
+    dit = load_dit(dit_path, family = family)
+    vae = load_vae(vae_path, family = family)
+    upscaler = load_latent_upscaler(upscaler_path, family = family)
+    rng = make_rng("cuda", seed = seed)
+
+    clip = video::load(input_path, max_frames = max_frames)
+    shape = tensor::shape(clip.video.frames)
+    # The causal K-VAE needs 4n+1 frames; extra trailing frames are dropped.
+    count = math::floor((shape[3] - 1) / 4) * 4 + 1
+    frames = tensor::crop(clip.video.frames, axes = [3], start = [0], size = [count])
+
+    plan = kandinsky6_vsr::plan(width = shape[1], height = shape[2], scale = scale, min_overlap = min_overlap)
+    latent = vae_to_dit_latents(vae, vae_encode(vae, prepare(frames, plan, count), rng = rng, posterior = "mode"))
+    tiles = map(plan.tiles, process = refine_tile, latent = latent, plan = plan, dit = dit, upscaler = upscaler,
+                rng = rng, steps = steps, noise = noise, signal = signal)
+    # Decode after every tile is refined, so the transformer and upscaler can be released first.
+    decoded = map(tiles, process = decode_tile, vae = vae)
+    video = {frames = kandinsky6_vsr::blend(decoded, plan), fps_num = clip.video.fps_num, fps_den = clip.video.fps_den}
+    video::save(output_path, video, audio = clip.audio)
+    return {video = video}
+}

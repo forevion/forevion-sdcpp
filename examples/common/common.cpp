@@ -469,6 +469,11 @@ ArgOptions SDContextParams::get_options() {
          0,
          &audio_encoder_path},
         {"",
+         "--latent-upscaler",
+         "path to the latent upscaler model (Kandinsky 6 VSR)",
+         0,
+         &latent_upscaler_path},
+        {"",
          "--taesd",
          "path to taesd. Using Tiny AutoEncoder for fast decoding (low quality)",
          0,
@@ -919,6 +924,7 @@ std::string SDContextParams::to_string() const {
         << "  audio_vae_path: \"" << audio_vae_path << "\",\n"
         << "  audio_encoder_path: \"" << audio_encoder_path << "\",\n"
         << "  taesd_path: \"" << taesd_path << "\",\n"
+        << "  latent_upscaler_path: \"" << latent_upscaler_path << "\",\n"
         << "  esrgan_path: \"" << esrgan_path << "\",\n"
         << "  control_net_path: \"" << control_net_path << "\",\n"
         << "  embedding_dir: \"" << embedding_dir << "\",\n"
@@ -1003,6 +1009,7 @@ SDOptPtr SDContextParams::to_context_opt() {
     opt.set_string("audio_vae_path", audio_vae_path);
     opt.set_string("audio_encoder_path", audio_encoder_path);
     opt.set_string("taesd_path", taesd_path);
+    opt.set_string("latent_upscaler_path", latent_upscaler_path);
     opt.set_string("control_net_path", control_net_path);
     if (!ip_adapter_path.empty())
         opt.set_string("ip_adapter_path", ip_adapter_path);
