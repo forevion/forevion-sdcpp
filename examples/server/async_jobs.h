@@ -66,6 +66,7 @@ struct AsyncGenerationJob {
     std::string result_media_b64;
     std::string result_media_mime_type;
     std::string result_preview_b64;
+    std::string result_audio_b64;
     int result_frame_count = 0;
     int result_fps         = 0;
     std::string error_code;

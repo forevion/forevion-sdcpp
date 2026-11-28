@@ -302,8 +302,11 @@ use the model's defaults. **New** clears the prompt, the inputs, these overrides
 the preview.
 
 Models that make sound (they have an audio VAE) are saved as AVI with the soundtrack,
-because WebM output is silent. The server also saves a silent WebM preview for the
-browser; the saved AVI keeps the sound. Results with sound show a ♪ badge.
+because WebM output is silent. Browsers cannot play AVI, so the server also saves a
+silent WebM preview and the soundtrack as a WAV file. The viewer plays the WAV in step
+with the preview: click **♪ Sound off** on the video to turn the sound on (the choice is
+remembered). Results saved before this change only have the sound in the AVI. Gallery
+thumbnails with sound show a ♪ badge.
 Kandinsky 6 makes sound when its variant has the MMAudio audio VAE (the catalog packages
 download it; add it to older variants with **Edit**) and offers **Image → video**.
 
