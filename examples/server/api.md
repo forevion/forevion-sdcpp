@@ -1724,7 +1724,9 @@ Output format behavior:
 - when the model produces audio (it has an audio VAE) and `output_format` is not `webp`, the
   server writes `avi` so the soundtrack is kept, because WebM output is silent. When the server
   saves results (`--output-dir`), it also saves a silent `<name>-preview.webm` that browsers can
-  play; the saved item lists it as `preview_file` and `preview_url`, with `has_audio: true`
+  play and the soundtrack as `<name>-audio.wav` (16-bit PCM, cut to the clip's length); the saved
+  item lists them as `preview_file` / `preview_url` and `audio_file` / `audio_url`, with
+  `has_audio: true`. Deleting the result deletes both
 
 ### Result Payload
 

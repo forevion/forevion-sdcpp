@@ -1359,55 +1359,57 @@ int create_video_from_sd_images(const char* filename, SDImage* images, int num_i
     return 0;
 }
 
+std::vector<uint8_t> encode_wav_to_vector(const float* interleaved_samples,
+                                          uint64_t sample_count,
+                                          uint32_t channels,
+                                          uint32_t sample_rate) {
+    if (interleaved_samples == nullptr || sample_count == 0 || channels == 0 || sample_rate == 0) {
+        return {};
+    }
+
+    const uint32_t bits_per_sample = 16;
+    const uint32_t block_align     = channels * (bits_per_sample / 8);
+    const uint32_t byte_rate       = sample_rate * block_align;
+    const uint32_t data_size       = static_cast<uint32_t>(sample_count * block_align);
+
+    std::vector<uint8_t> wav;
+    wav.reserve(44 + data_size);
+    auto put = [&](const void* data, size_t size) {
+        const auto* bytes = static_cast<const uint8_t*>(data);
+        wav.insert(wav.end(), bytes, bytes + size);
+    };
+    auto put16 = [&](uint16_t value) { put(&value, sizeof(value)); };
+    auto put32 = [&](uint32_t value) { put(&value, sizeof(value)); };
+
+    put("RIFF", 4);
+    put32(36 + data_size);
+    put("WAVE", 4);
+    put("fmt ", 4);
+    put32(16);
+    put16(1);
+    put16(static_cast<uint16_t>(channels));
+    put32(sample_rate);
+    put32(byte_rate);
+    put16(static_cast<uint16_t>(block_align));
+    put16(static_cast<uint16_t>(bits_per_sample));
+    put("data", 4);
+    put32(data_size);
+
+    const uint64_t count = sample_count * channels;
+    for (uint64_t i = 0; i < count; ++i) {
+        const float sample = std::max(-1.0f, std::min(1.0f, interleaved_samples[i]));
+        put16(static_cast<uint16_t>(static_cast<int16_t>(std::lrint(sample * 32767.0f))));
+    }
+    return wav;
+}
+
 bool write_wav_to_file(const std::string& path,
                        const float* interleaved_samples,
                        uint64_t sample_count,
                        uint32_t channels,
                        uint32_t sample_rate) {
-    if (interleaved_samples == nullptr || sample_count == 0 || channels == 0 || sample_rate == 0) {
-        return false;
-    }
-
-    std::ofstream file(fs::u8path(path), std::ios::binary);
-    if (!file.is_open()) {
-        return false;
-    }
-
-    uint32_t bits_per_sample  = 16;
-    uint32_t bytes_per_sample = bits_per_sample / 8;
-    uint32_t block_align      = channels * bytes_per_sample;
-    uint32_t byte_rate        = sample_rate * block_align;
-    uint32_t data_size        = static_cast<uint32_t>(sample_count * channels * bytes_per_sample);
-    uint32_t riff_size        = 36 + data_size;
-
-    file.write("RIFF", 4);
-    file.write(reinterpret_cast<const char*>(&riff_size), sizeof(riff_size));
-    file.write("WAVE", 4);
-    file.write("fmt ", 4);
-
-    uint32_t fmt_size            = 16;
-    uint16_t audio_format        = 1;
-    uint16_t wav_channels        = static_cast<uint16_t>(channels);
-    uint16_t wav_block_align     = static_cast<uint16_t>(block_align);
-    uint16_t wav_bits_per_sample = static_cast<uint16_t>(bits_per_sample);
-    file.write(reinterpret_cast<const char*>(&fmt_size), sizeof(fmt_size));
-    file.write(reinterpret_cast<const char*>(&audio_format), sizeof(audio_format));
-    file.write(reinterpret_cast<const char*>(&wav_channels), sizeof(wav_channels));
-    file.write(reinterpret_cast<const char*>(&sample_rate), sizeof(sample_rate));
-    file.write(reinterpret_cast<const char*>(&byte_rate), sizeof(byte_rate));
-    file.write(reinterpret_cast<const char*>(&wav_block_align), sizeof(wav_block_align));
-    file.write(reinterpret_cast<const char*>(&wav_bits_per_sample), sizeof(wav_bits_per_sample));
-
-    file.write("data", 4);
-    file.write(reinterpret_cast<const char*>(&data_size), sizeof(data_size));
-
-    std::vector<int16_t> pcm(sample_count * channels);
-    for (size_t i = 0; i < pcm.size(); ++i) {
-        float sample = std::max(-1.0f, std::min(1.0f, interleaved_samples[i]));
-        pcm[i]       = static_cast<int16_t>(std::lrint(sample * 32767.0f));
-    }
-    file.write(reinterpret_cast<const char*>(pcm.data()), static_cast<std::streamsize>(pcm.size() * sizeof(int16_t)));
-    return file.good();
+    const auto wav = encode_wav_to_vector(interleaved_samples, sample_count, channels, sample_rate);
+    return !wav.empty() && write_binary_file_bytes(path, wav);
 }
 
 static uint16_t read_le16(const uint8_t* data) {

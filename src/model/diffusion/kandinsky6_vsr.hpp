@@ -1,6 +1,8 @@
 #ifndef __SD_MODEL_DIFFUSION_KANDINSKY6_VSR_HPP__
 #define __SD_MODEL_DIFFUSION_KANDINSKY6_VSR_HPP__
 
+#include <numeric>
+
 #include "model/diffusion/kandinsky6.hpp"
 
 // Kandinsky 6.0 video super-resolution transformer (Kandinsky6SRTransformer3DModel in diffusers).
@@ -146,7 +148,9 @@ namespace Kandinsky6VSR {
             // The released checkpoints are anchor-free: anchor latent and anchor mask channels are zero.
             input_ = sd::Tensor<float>::zeros({W, H, T, c.visual_in_channels()});
             std::copy_n(x.data(), static_cast<size_t>(W * H * T * c.in_visual_dim), input_.data());
-            pe_            = K6::make_rope_3d(T, H, W, c);
+            std::vector<int64_t> frames(static_cast<size_t>(T));
+            std::iota(frames.begin(), frames.end(), int64_t(0));
+            pe_ = K6::make_rope_3d(frames, H, W, c);
             auto timesteps = sd::Tensor<float>::from_vector({timestep});
             auto get_graph = [&]() -> ggml_cgraph* {
                 ggml_cgraph* gf = new_graph_custom(K6::KANDINSKY6_GRAPH_SIZE);

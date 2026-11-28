@@ -1009,7 +1009,7 @@
       "id": "kandinsky6-lite",
       "name": "Kandinsky 6.0 Lite",
       "group": "Kandinsky 6",
-      "description": "Distilled text-to-video, 10 steps. Includes the TAEHV tiny decoder (fast) and the HunyuanVideo VAE (sharp). The transformer is packed to Q8_0; the Qwen text encoder stays bf16 on machines with 48 GB RAM or more, otherwise it is packed to Q8_0.",
+      "description": "Distilled text-to-video, 10 steps. Makes sound and supports a start image. Includes the TAEHV tiny decoder (fast) and the HunyuanVideo VAE (sharp). The transformer is packed to Q8_0; the Qwen text encoder stays bf16 on machines with 48 GB RAM or more, otherwise it is packed to Q8_0.",
       "license": "MIT",
       "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers",
       "media": [
@@ -1028,6 +1028,12 @@
           "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
           "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
           "size": 985943868
+        },
+        {
+          "path": "vae/kandinsky6-mmaudio-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/audio_vae/diffusion_pytorch_model.safetensors",
+          "sha256": "dfccdf9d0d8d3de270a23b097400f21adb91f4ec683bdc26369cb65b08a5af87",
+          "size": 1711158920
         },
         {
           "path": "vae/taehv.safetensors",
@@ -1110,13 +1116,16 @@
           "Distilled Kandinsky 6.0 Lite: 10 steps, CFG 1, Euler sampler with the PiFlow scheduler.",
           "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
           "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Sound: the MMAudio audio VAE turns the audio the model generates with the video into a 44.1 kHz soundtrack. Leave it out for silent clips.",
+          "Image → video: the start image is encoded with the HunyuanVideo VAE when the config has one (even if TAEHV decodes), otherwise with TAEHV, which is close but less exact.",
           "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
         ],
         "inputs": {
           "diffusion_model": "{transformer}",
           "llm": "{qwen}",
           "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
-          "tae": "vae/taehv.safetensors"
+          "tae": "vae/taehv.safetensors",
+          "audio_vae": "vae/kandinsky6-mmaudio-vae.safetensors"
         },
         "settings": {
           "size_multiple": 16,
@@ -1136,6 +1145,9 @@
             "width": 864,
             "height": 480
           },
+          "features": [
+            "init_image"
+          ],
           "disabled_features": [
             "img2img",
             "mask_image"
@@ -1170,6 +1182,12 @@
           "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
           "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
           "size": 985943868
+        },
+        {
+          "path": "vae/kandinsky6-mmaudio-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/audio_vae/diffusion_pytorch_model.safetensors",
+          "sha256": "dfccdf9d0d8d3de270a23b097400f21adb91f4ec683bdc26369cb65b08a5af87",
+          "size": 1711158920
         },
         {
           "path": "vae/taehv.safetensors",
@@ -1253,13 +1271,16 @@
           "An empty negative prompt is replaced by the release's default negative prompt, as in the official pipeline.",
           "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
           "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Sound: the MMAudio audio VAE turns the audio the model generates with the video into a 44.1 kHz soundtrack. Leave it out for silent clips.",
+          "Image → video: the start image is encoded with the HunyuanVideo VAE when the config has one (even if TAEHV decodes), otherwise with TAEHV, which is close but less exact.",
           "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
         ],
         "inputs": {
           "diffusion_model": "{transformer}",
           "llm": "{qwen}",
           "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
-          "tae": "vae/taehv.safetensors"
+          "tae": "vae/taehv.safetensors",
+          "audio_vae": "vae/kandinsky6-mmaudio-vae.safetensors"
         },
         "settings": {
           "size_multiple": 16,
@@ -1279,6 +1300,9 @@
             "width": 864,
             "height": 480
           },
+          "features": [
+            "init_image"
+          ],
           "disabled_features": [
             "img2img",
             "mask_image"
@@ -1313,6 +1337,12 @@
           "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
           "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
           "size": 985943868
+        },
+        {
+          "path": "vae/kandinsky6-mmaudio-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/audio_vae/diffusion_pytorch_model.safetensors",
+          "sha256": "dfccdf9d0d8d3de270a23b097400f21adb91f4ec683bdc26369cb65b08a5af87",
+          "size": 1711158920
         },
         {
           "path": "vae/taehv.safetensors",
@@ -1400,13 +1430,16 @@
           "Q8_0 is within 1% of the bf16 model; Q4_K, used below 48 GB RAM, differs by about 5% but fits in RAM with room for the rest of the pipeline.",
           "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
           "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Sound: the MMAudio audio VAE turns the audio the model generates with the video into a 44.1 kHz soundtrack. Leave it out for silent clips.",
+          "Image → video: the start image is encoded with the HunyuanVideo VAE when the config has one (even if TAEHV decodes), otherwise with TAEHV, which is close but less exact.",
           "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
         ],
         "inputs": {
           "diffusion_model": "{transformer}",
           "llm": "{qwen}",
           "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
-          "tae": "vae/taehv.safetensors"
+          "tae": "vae/taehv.safetensors",
+          "audio_vae": "vae/kandinsky6-mmaudio-vae.safetensors"
         },
         "settings": {
           "size_multiple": 16,
@@ -1426,6 +1459,9 @@
             "width": 864,
             "height": 480
           },
+          "features": [
+            "init_image"
+          ],
           "disabled_features": [
             "img2img",
             "mask_image"
@@ -1607,6 +1643,1050 @@
             "model_args": "variant=5s"
           }
         }
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-lightx2v-4-step-t2v",
+      "name": "LightX2V 4-step (T2V) LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Makes Wan 2.2 T2V A14B in 4 steps instead of 20+: about 5 times less GPU time. For Wan 2.2 T2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/wan2.2_t2v_A14b_high_noise_lora_rank64_lightx2v_4step_1217.safetensors",
+        "low": "loras/wan2.2_t2v_A14b_low_noise_lora_rank64_lightx2v_4step_1217.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/wan2.2_t2v_A14b_high_noise_lora_rank64_lightx2v_4step_1217.safetensors",
+          "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_t2v_A14b_high_noise_lora_rank64_lightx2v_4step_1217.safetensors",
+          "sha256": "89003385f8a9d53ba58fd6ede647fdc90292e8568a54683fcfe6db5556a31769",
+          "size": 613518320
+        },
+        {
+          "path": "loras/wan2.2_t2v_A14b_low_noise_lora_rank64_lightx2v_4step_1217.safetensors",
+          "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_t2v_A14b_low_noise_lora_rank64_lightx2v_4step_1217.safetensors",
+          "sha256": "4df7c206f3189472da2f92c0a42dcf308f04433d9c14302d08d56e99a3f51322",
+          "size": 613518320
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Speed-up LoRA: set Steps to 4 and CFG to 1 under Advanced. Use the high-noise file on the high-noise expert and the low-noise file on the low-noise expert.",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-lightx2v-4-step-i2v",
+      "name": "LightX2V 4-step (I2V) LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Makes Wan 2.2 I2V A14B in 4 steps instead of 20+: about 5 times less GPU time. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+        "low": "loras/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+          "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_high_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+          "sha256": "887c3bdeb74e83859c920438e16ca31f39ab18ce189abc5f0e36f8348c5bbb19",
+          "size": 634645944
+        },
+        {
+          "path": "loras/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+          "url": "https://huggingface.co/lightx2v/Wan2.2-Distill-Loras/resolve/main/wan2.2_i2v_A14b_low_noise_lora_rank64_lightx2v_4step_1022.safetensors",
+          "sha256": "8833bd4fd7c8eabebf0bc8ee5cfaf47f4f310ce116928a02c1adf8941dd4b0f1",
+          "size": 739472104
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Speed-up LoRA: set Steps to 4 and CFG to 1 under Advanced. Use the high-noise file on the high-noise expert and the low-noise file on the low-noise expert.",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-lightx2v-motion-fix-i2v",
+      "name": "LightX2V motion fix (I2V) LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "A 4-step speed-up for Wan 2.2 I2V A14B that avoids the slow motion of the plain LightX2V LoRA. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/rzgar/Wan2.2_I2V_LightX2V_Slow-Mo_Fix",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/wan2.2_i2v_lightx2v_motion_fix_high.safetensors",
+        "low": "loras/wan2.2_i2v_lightx2v_motion_fix_low.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/wan2.2_i2v_lightx2v_motion_fix_high.safetensors",
+          "url": "https://huggingface.co/rzgar/Wan2.2_I2V_LightX2V_Slow-Mo_Fix/resolve/main/wan2.2_i2v_lightx2v_motion_fix_high.safetensors",
+          "sha256": "08779d70f0076330e54433503d4e7ab6a791aaed55b2ab7e09cdcb3b9387efe7",
+          "size": 634687436
+        },
+        {
+          "path": "loras/wan2.2_i2v_lightx2v_motion_fix_low.safetensors",
+          "url": "https://huggingface.co/rzgar/Wan2.2_I2V_LightX2V_Slow-Mo_Fix/resolve/main/wan2.2_i2v_lightx2v_motion_fix_low.safetensors",
+          "sha256": "4e8939db5edc9389bab0001838fa09affe9ec51dd3c49d21a197edb6e0a82211",
+          "size": 632204588
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Speed-up LoRA: set Steps to 4 and CFG to 1 under Advanced. Use the high-noise file on the high-noise expert and the low-noise file on the low-noise expert.",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-lightx2v-2-step-i2v",
+      "name": "LightX2V 2-step (I2V) LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The fastest Wan 2.2 I2V A14B speed-up: 2 steps, with some loss of detail. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/rzgar/Wan2.2_I2V_LightX2V_2Step",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/Wan2.2_I2V_LightX2V_2step_high_noise.safetensors",
+        "low": "loras/Wan2.2_I2V_LightX2V_2step_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/Wan2.2_I2V_LightX2V_2step_high_noise.safetensors",
+          "url": "https://huggingface.co/rzgar/Wan2.2_I2V_LightX2V_2Step/resolve/main/Wan2.2_I2V_LightX2V_2step_high_noise.safetensors",
+          "sha256": "a760a5d48f64190fc0c6713015902b4a195db2b6d53d19369257603b20145cd0",
+          "size": 1244141856
+        },
+        {
+          "path": "loras/Wan2.2_I2V_LightX2V_2step_low_noise.safetensors",
+          "url": "https://huggingface.co/rzgar/Wan2.2_I2V_LightX2V_2Step/resolve/main/Wan2.2_I2V_LightX2V_2step_low_noise.safetensors",
+          "sha256": "167cd42d8354d9e6befc4e3f3b9558a72cd8767fab7d7bf85f88d481e0f889f0",
+          "size": 1244141856
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Speed-up LoRA: set Steps to 2 and CFG to 1 under Advanced. Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-orbit-shot",
+      "name": "Orbit shot LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The camera orbits around the subject of the start image. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/wan22_14b_i2v_orbit_high_noise.safetensors",
+        "low": "loras/wan22_14b_i2v_orbit_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/wan22_14b_i2v_orbit_high_noise.safetensors",
+          "url": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_high_noise.safetensors",
+          "sha256": "29577153141ca7f6405e34259d52bd32c673be7fd647dd607ba57db11c73cf14",
+          "size": 153453568
+        },
+        {
+          "path": "loras/wan22_14b_i2v_orbit_low_noise.safetensors",
+          "url": "https://huggingface.co/ostris/wan22_i2v_14b_orbit_shot_lora/resolve/main/wan22_14b_i2v_orbit_low_noise.safetensors",
+          "sha256": "6eed20e70161f97d209fca83fd5f1a37119885590a25db1ce3231b122c6ecf95",
+          "size": 153453568
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-360-rotation",
+      "name": "360 rotation LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The subject turns a full 360 degrees. For Wan 2.2 I2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/360Rotation-Redmond-WAN2-I2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_360Rotation_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_360Rotation_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_360Rotation_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/360Rotation-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2%5D360Rotation_Redmond_high_noise.safetensors",
+          "sha256": "1dc6acbb1fd3b64646739ee559039c4bc8a8bb1b3ce5e94a29577846871686a4",
+          "size": 153453616
+        },
+        {
+          "path": "loras/WAN2.2_360Rotation_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/360Rotation-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2%5D360Rotation_Redmond_low_noise.safetensors",
+          "sha256": "258af1a39cad4a4f4d2e027d752ce07b03623e1a07849b5b0994ff17c169530b",
+          "size": 153453616
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-explosion",
+      "name": "Explosion LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The subject of the start image explodes. For Wan 2.2 I2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Explosion-Redmond-WAN2-I2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2-I2V_EXPLOSION_REDMOND_high_noise.safetensors",
+        "low": "loras/WAN2.2-I2V_EXPLOSION_REDMOND_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2-I2V_EXPLOSION_REDMOND_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Explosion-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2-I2V%5DEXPLOSION_REDMOND_high_noise.safetensors",
+          "sha256": "51b20f2b4f713d1021c1da78c5bdcebc273efa9a2c7c18992d93e3cebabba604",
+          "size": 76775008
+        },
+        {
+          "path": "loras/WAN2.2-I2V_EXPLOSION_REDMOND_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Explosion-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2-I2V%5DEXPLOSION_REDMOND_low_noise.safetensors",
+          "sha256": "9630953d9830ea072f7698e6fc13d943f7f8da7f2d75edf5266a784255152774",
+          "size": 76775008
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-disintegration",
+      "name": "Disintegration LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The subject crumbles away into particles. For Wan 2.2 I2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Disintegration-Redmond-WAN2-I2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/Wan2.2_Disintegration_Redmond_high_noise.safetensors",
+        "low": "loras/Wan2.2_Disintegration_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/Wan2.2_Disintegration_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Disintegration-Redmond-WAN2-I2V-14B/resolve/main/%5BWan2.2%5DDisintegration_Redmond_high_noise.safetensors",
+          "sha256": "555d2d39913a829820d844a9c9082fbaeaa8ca4d963087ad0cbf67f09d0fa606",
+          "size": 76775024
+        },
+        {
+          "path": "loras/Wan2.2_Disintegration_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Disintegration-Redmond-WAN2-I2V-14B/resolve/main/%5BWan2.2%5DDisintegration_Redmond_low_noise.safetensors",
+          "sha256": "c71b0aabae6c73fee423f35f5ed088e082196ca41cddb9265424af5c6a3608a8",
+          "size": 76775024
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-metal-transformation",
+      "name": "Metal transformation LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The subject turns into metal. For Wan 2.2 I2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Metalcification-Redmond-WAN2-I2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_Metalcification_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_Metalcification_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_Metalcification_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Metalcification-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2%5DMetalcification_Redmond_high_noise.safetensors",
+          "sha256": "3cc5fcf17722c0e709a432c05b2041e54109651d50766e44a4083388b8766971",
+          "size": 153453648
+        },
+        {
+          "path": "loras/WAN2.2_Metalcification_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Metalcification-Redmond-WAN2-I2V-14B/resolve/main/%5BWAN2.2%5DMetalcification_Redmond_low_noise.safetensors",
+          "sha256": "9956951204e347a4c5636189eed2961d686c2a8665bb0ef4847c881dc5520128",
+          "size": 153453648
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-attack-sprite-animation",
+      "name": "Attack sprite animation LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Game-sprite attack animations from a character image. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/Teluv/Wan_Video_Attack_Sprite_Animation",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/Wan_i14b_Attack_Sprite_Animation_ver3_high_noise.safetensors",
+        "low": "loras/Wan_i14b_Attack_Sprite_Animation_ver3_low_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/Wan_i14b_Attack_Sprite_Animation_ver3_high_noise.safetensors",
+          "url": "https://huggingface.co/Teluv/Wan_Video_Attack_Sprite_Animation/resolve/main/Wan_i14b_Attack_Sprite_Animation_ver3_high_noise.safetensors",
+          "sha256": "9dcaf603a283d3a4161b1456b10db07f66f8475889591b1338da519c7c8096d3",
+          "size": 153453600
+        },
+        {
+          "path": "loras/Wan_i14b_Attack_Sprite_Animation_ver3_low_noise.safetensors",
+          "url": "https://huggingface.co/Teluv/Wan_Video_Attack_Sprite_Animation/resolve/main/Wan_i14b_Attack_Sprite_Animation_ver3_low_noise.safetensors",
+          "sha256": "1540e1983df386a57808e0ecc1dbd925ad090282c622cfcda6ecd045c89fe21c",
+          "size": 153453600
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-kung-fu",
+      "name": "Kung fu LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The person in the start image performs kung fu moves. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/starsfriday/Wan2.2-I2V-KungFu",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/wan2.2_wugong_i2v_high.safetensors",
+        "low": "loras/wan2.2_wugong_i2v_low.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/wan2.2_wugong_i2v_high.safetensors",
+          "url": "https://huggingface.co/starsfriday/Wan2.2-I2V-KungFu/resolve/main/wan2.2_wugong_i2v_high.safetensors",
+          "sha256": "6a2eb34a83ebb9b76fb09f2ae66e1ecdeba1dd4cbb0143574bbe9ae87652b9f8",
+          "size": 306807976
+        },
+        {
+          "path": "loras/wan2.2_wugong_i2v_low.safetensors",
+          "url": "https://huggingface.co/starsfriday/Wan2.2-I2V-KungFu/resolve/main/wan2.2_wugong_i2v_low.safetensors",
+          "sha256": "a62c61cb866a85433bc07d64e4d344fe278fff1c9352829ad5e873b0c87261a8",
+          "size": 306807976
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-transitions",
+      "name": "Transitions LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Stylised transition effects; this LoRA has only a high-noise file. For Wan 2.2 I2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/systms/SYSTMS-TRNS-LoRA-Wan22",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 I2V A14B",
+        "strength": 1.0,
+        "high": "loras/SYSTSMS_TRNS_V1_LoRA_WAN22_high_noise.safetensors",
+        "models": [
+          "wan22-i2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/SYSTSMS_TRNS_V1_LoRA_WAN22_high_noise.safetensors",
+          "url": "https://huggingface.co/systms/SYSTMS-TRNS-LoRA-Wan22/resolve/main/SYSTSMS_TRNS_V1_LoRA_WAN22_high_noise.safetensors",
+          "sha256": "f3656457a0ebd5c1177b4b692b7dd01fbd6bfa74c03c34574f2265af13273fe3",
+          "size": 613516752
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Use it on the high-noise expert only.",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-yarn-woven-style",
+      "name": "Yarn-woven style LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Everything looks knitted from yarn. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/YarnwovenStyle-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2_YarnwovenStyle-Redmond_high_noise.safetensors",
+        "low": "loras/WAN2_YarnwovenStyle-Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2_YarnwovenStyle-Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/YarnwovenStyle-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2%5DYarnwovenStyle-Redmond_high_noise.safetensors",
+          "sha256": "2db3088642ac9771ce214006e44abc0e8232772077d9683c9e524a82cb9a1422",
+          "size": 306808368
+        },
+        {
+          "path": "loras/WAN2_YarnwovenStyle-Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/YarnwovenStyle-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2%5DYarnwovenStyle-Redmond_low_noise.safetensors",
+          "sha256": "840ffe349e0f6760fee0b3869c2a2432a3e454aed7f0bc1cf3837932a5f4c535",
+          "size": 306808368
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-vintage-cinematic",
+      "name": "Vintage cinematic LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "An old-film cinematic look; one file for both experts. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Vintage-Cinematic-Redmond-Wan22",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "both": "loras/Vintage-Cinematic-Redmond-WAN22.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/Vintage-Cinematic-Redmond-WAN22.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Vintage-Cinematic-Redmond-Wan22/resolve/main/Vintage-Cinematic-Redmond-WAN22.safetensors",
+          "sha256": "a6d1ca3635fb8c240b8b6a5cf583363b6645238227ab91b64374dd6ba05d898d",
+          "size": 306807944
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-fish-eye-lens",
+      "name": "Fish-eye lens LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "A fish-eye camera lens look. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/FishEye-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/Fish_Eye_high_noise.safetensors",
+        "low": "loras/Fish_Eye_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/Fish_Eye_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/FishEye-Redmond-WAN2-T2V-14B/resolve/main/Fish%20Eye_high_noise.safetensors",
+          "sha256": "21ef0aaf7803e886af052d630797a8b4df1c9f5d69377ac52561d9072d74c456",
+          "size": 153453616
+        },
+        {
+          "path": "loras/Fish_Eye_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/FishEye-Redmond-WAN2-T2V-14B/resolve/main/Fish%20Eye_low_noise.safetensors",
+          "sha256": "63f6a4b0b22000db1e3ac297175d7dd178dafad0e3cc311829328b81c5ebe06b",
+          "size": 153453616
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-object-typography",
+      "name": "Object typography LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Words formed from objects. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/ObjectTypo-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2_ObjectTypo_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2_ObjectTypo_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2_ObjectTypo_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/ObjectTypo-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2%5DObjectTypo_Redmond_high_noise.safetensors",
+          "sha256": "94904b4ffff84a634f7561a7b49e9846096595f61b27fe5297535bdbe358350b",
+          "size": 306808360
+        },
+        {
+          "path": "loras/WAN2_ObjectTypo_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/ObjectTypo-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2%5DObjectTypo_Redmond_low_noise.safetensors",
+          "sha256": "cd8e82a0417276ecc2bd39ed04f2249b3ce2bc72dc7b2bd235bcd596776ec6c8",
+          "size": 306808360
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-follow-cam",
+      "name": "Follow cam LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The camera follows the subject from behind. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/FollowCam-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_Followcam_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_Followcam_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_Followcam_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/FollowCam-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DFollowcam_Redmond_high_noise.safetensors",
+          "sha256": "f6e1cb9588ab9b4719282d7967f3f3986ba6ab14a4ee479536b4d954ab045b01",
+          "size": 306808360
+        },
+        {
+          "path": "loras/WAN2.2_Followcam_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/FollowCam-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DFollowcam_Redmond_low_noise.safetensors",
+          "sha256": "a1084c3bece3fd911dd3bb28ae9fef648ea4e1e5e77fce14400cb7afb146af11",
+          "size": 306808360
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-split-screen",
+      "name": "Split screen LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Split-screen shots. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/SplitScreen-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_SplitScreen_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_SplitScreen_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_SplitScreen_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/SplitScreen-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DSplitScreen_Redmond_high_noise.safetensors",
+          "sha256": "1494274a17ec9ab92294e8fcab5dfdf4f7519727a65e55b593b681b6a0c5e003",
+          "size": 306808432
+        },
+        {
+          "path": "loras/WAN2.2_SplitScreen_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/SplitScreen-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DSplitScreen_Redmond_low_noise.safetensors",
+          "sha256": "779070b68519b1bf73a12bd8d6d4edd22913deb757cdbfd2d26ebaf40d407d28",
+          "size": 306808432
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-microverse",
+      "name": "Microverse LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Tiny miniature worlds, like a macro shot of a model set. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Microverse-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_Microverse_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_Microverse_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_Microverse_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Microverse-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DMicroverse_Redmond_high_noise.safetensors",
+          "sha256": "b99bb9e00761fafb77901cebb249470aa36cafeae703829f09d6fca7b6978d0b",
+          "size": 306808424
+        },
+        {
+          "path": "loras/WAN2.2_Microverse_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Microverse-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DMicroverse_Redmond_low_noise.safetensors",
+          "sha256": "5e2d5d6607fd94fda83660f7b459196c636994f799d7d7517c64d492fe7d00f0",
+          "size": 306808424
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-axial-view",
+      "name": "Axial view LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Straight top-down or bottom-up axial camera views. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/AxialView-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2_AxialView_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2_AxialView_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2_AxialView_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/AxialView-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2%5DAxialView_Redmond_high_noise.safetensors",
+          "sha256": "5582df9ca121146c27ffc0fd805d858dfa3341e76c1a56dd1e9b7689d5d0f1a1",
+          "size": 306808360
+        },
+        {
+          "path": "loras/WAN2_AxialView_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/AxialView-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2%5DAxialView_Redmond_low_noise.safetensors",
+          "sha256": "8066316c245ac6358ca82df031ffeea1f9383ebba0da2d8614c28049d2f6b47e",
+          "size": 306808360
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-off-season-santa",
+      "name": "Off-season Santa LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Santa Claus doing everyday things outside Christmas. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/OffSeasonSanta-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_Offseasonsanta_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_Offseasonsanta_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_Offseasonsanta_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/OffSeasonSanta-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DOffseasonsanta_Redmond_high_noise.safetensors",
+          "sha256": "420b11ed7c1c197aeb65a04ff3ccb5044e68dbc543fcf671fb5c7da77351b8be",
+          "size": 306808368
+        },
+        {
+          "path": "loras/WAN2.2_Offseasonsanta_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/OffSeasonSanta-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DOffseasonsanta_Redmond_low_noise.safetensors",
+          "sha256": "481c60e24f7f6a103229357d90502e952abbbd68e390befc07dc7f4ff9dcf442",
+          "size": 306808368
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-heart-morph",
+      "name": "Heart morph LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Things morph into heart shapes. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Heartmorph-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_Heartmorph-Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_Heartmorph-Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_Heartmorph-Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Heartmorph-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DHeartmorph-Redmond_high_noise.safetensors",
+          "sha256": "48349cd36da9e9996132ad8a5e7e06114fd9f27aa2c47bb11fb020f1dc017cad",
+          "size": 306808360
+        },
+        {
+          "path": "loras/WAN2.2_Heartmorph-Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Heartmorph-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DHeartmorph-Redmond_low_noise.safetensors",
+          "sha256": "2f02adc361a5845e41284c3d87fbdba74d97042bbab5c30972bff24e98fd9f42",
+          "size": 306808360
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-window-seat",
+      "name": "Window seat LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Views out of a train or plane window. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/WindowSeat-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2_WindowSeat_Redmond_high_noise.safetensors",
+        "low": "loras/WAN2.2_WindowSeat_Redmond_low_noise.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_WindowSeat_Redmond_high_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/WindowSeat-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DWindowSeat_Redmond_high_noise.safetensors",
+          "sha256": "201c90f205b73553c3efad70b5bca11d7b1f37aface782cbaa289e6db367bc74",
+          "size": 306808360
+        },
+        {
+          "path": "loras/WAN2.2_WindowSeat_Redmond_low_noise.safetensors",
+          "url": "https://huggingface.co/artificialguybr/WindowSeat-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DWindowSeat_Redmond_low_noise.safetensors",
+          "sha256": "80418bd27d236407c30adde6608ca0895faa5c83229b6a11db137ab10978f236",
+          "size": 306808360
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-spectramatic",
+      "name": "Spectramatic LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "Rainbow light and prism colour effects; one file for both experts. For Wan 2.2 T2V A14B.",
+      "license": "CC0-1.0",
+      "homepage": "https://huggingface.co/artificialguybr/Spectramatic-Redmond-WAN2-T2V-14B",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "both": "loras/WAN2.2_Spectramatic_Redmond.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2_Spectramatic_Redmond.safetensors",
+          "url": "https://huggingface.co/artificialguybr/Spectramatic-Redmond-WAN2-T2V-14B/resolve/main/%5BWAN2.2%5DSpectramatic_Redmond.safetensors",
+          "sha256": "38101f1fb88b107e335118838b0c135ad2662c48c1ed770deab7f94556ea88b0",
+          "size": 306807944
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-a14b-gta-style",
+      "name": "GTA style LoRA",
+      "group": "LoRAs: Wan 2.2 A14B",
+      "description": "The look of the Grand Theft Auto loading-screen art. For Wan 2.2 T2V A14B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/obsxrver/Wan2.2_GTA-Style",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 T2V A14B",
+        "strength": 1.0,
+        "high": "loras/WAN2.2-HighNoise_GTA-Style-v1_0.safetensors",
+        "low": "loras/WAN2.2-LowNoise_GTA-Style-v1_0.safetensors",
+        "models": [
+          "wan22-t2v-a14b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/WAN2.2-HighNoise_GTA-Style-v1_0.safetensors",
+          "url": "https://huggingface.co/obsxrver/Wan2.2_GTA-Style/resolve/main/WAN2.2-HighNoise_GTA-Style-v1_0.safetensors",
+          "sha256": "c7558462777770a643e39be92071a84af80f67375a6c3f8f668e7ee4e2531e1d",
+          "size": 153492776
+        },
+        {
+          "path": "loras/WAN2.2-LowNoise_GTA-Style-v1_0.safetensors",
+          "url": "https://huggingface.co/obsxrver/Wan2.2_GTA-Style/resolve/main/WAN2.2-LowNoise_GTA-Style-v1_0.safetensors",
+          "sha256": "69f19ab9ab1b2c609639e75d2197b35fac6d2b543aeb616755bca14ae1be1f30",
+          "size": 153492776
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Two files: pick the high-noise one for the high-noise expert and the low-noise one for the low-noise expert (the LoRAs section on Create offers this).",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-5b-historic-colour-film",
+      "name": "Historic colour film LoRA",
+      "group": "LoRAs: Wan 2.2 5B / FastWan",
+      "description": "The look of early colour photography and film. For Wan 2.2 TI2V 5B and FastWan 2.2 5B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/AlekseyCalvin/HSToric_Color_Wan2.2_5B_LoRA_BySilverAgePoets",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 TI2V 5B and FastWan 2.2 5B",
+        "strength": 1.0,
+        "both": "loras/HSToric_color_Wan22_5b_LoRA.safetensors",
+        "models": [
+          "wan22-ti2v-5b",
+          "fastwan22-5b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/HSToric_color_Wan22_5b_LoRA.safetensors",
+          "url": "https://huggingface.co/AlekseyCalvin/HSToric_Color_Wan2.2_5B_LoRA_BySilverAgePoets/resolve/main/HSToric_color_Wan22_5b_LoRA.safetensors",
+          "sha256": "5c2fc21b1e74d5088318fea72c676181650a0f771cc521151edfc43f6ea9ec77",
+          "size": 322511512
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
+      }
+    },
+    {
+      "id": "lora-wan22-5b-crush-it",
+      "name": "Crush it LoRA",
+      "group": "LoRAs: Wan 2.2 5B / FastWan",
+      "description": "Image to video: the object in the start image gets crushed. For Wan 2.2 TI2V 5B and FastWan 2.2 5B.",
+      "license": "Apache-2.0",
+      "homepage": "https://huggingface.co/ostris/wan22_5b_i2v_crush_it_lora",
+      "media": [
+        "lora"
+      ],
+      "lora": {
+        "for": "Wan 2.2 TI2V 5B and FastWan 2.2 5B",
+        "strength": 1.0,
+        "both": "loras/wan22_5b_i2v_crush_it_lora.safetensors",
+        "models": [
+          "wan22-ti2v-5b",
+          "fastwan22-5b"
+        ]
+      },
+      "files": [
+        {
+          "path": "loras/wan22_5b_i2v_crush_it_lora.safetensors",
+          "url": "https://huggingface.co/ostris/wan22_5b_i2v_crush_it_lora/resolve/main/wan22_5b_i2v_crush_it_lora.safetensors",
+          "sha256": "00a3ed72d8e257b416e1232cce07acf76cfb3ad7538f8ba995b6818f0b560f23",
+          "size": 161293208
+        }
+      ],
+      "guide": {
+        "notes": [
+          "Use Image → video with a start image.",
+          "Strength 1 is the usual starting point; lower it if the effect is too strong."
+        ]
       }
     }
   ]

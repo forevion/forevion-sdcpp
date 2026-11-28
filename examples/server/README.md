@@ -241,8 +241,16 @@ Choose **Latest (develop)** to get such edits before they are released.
 
 The built-in list has FastWan 2.2 5B, Wan 2.2 TI2V 5B, Wan 2.2 T2V / I2V A14B, Wan 2.2 S2V
 14B, Wan 2.1 T2V 1.3B / 14B, Wan 2.1 I2V 14B (480p and 720p), Wan 2.1 FLF2V 14B, Wan 2.1
-VACE 1.3B / 14B, Kandinsky 6.0 Lite and the Kandinsky 6.0 VSR 2.0 / 5s video upscalers. The 14B models use Q4_K_M files (about 10 GB each)
-so they fit in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
+VACE 1.3B / 14B, Kandinsky 6.0 Lite, Lite (non-distilled) and Pro distill, and the Kandinsky 6.0
+VSR 2.0 / 5s video upscalers. The 14B models use Q4_K_M files (about 10 GB each) so they fit
+in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
+
+**LoRAs** have their own section below the models: 27 open-licence (Apache-2.0 or CC0)
+LoRAs for Wan 2.2 A14B (LightX2V 4-step and 2-step speed-ups, camera moves, effects and
+styles) and for Wan 2.2 5B / FastWan. A LoRA needs no setup: once downloaded it is
+**Ready**, and **Use** opens Create with it added to a ready variant of a model it fits,
+on the right expert for A14B high-/low-noise files. Speed-up LoRAs also need the steps
+and CFG their notes give. No Kandinsky 6 LoRAs exist yet.
 
 Downloads never create variants by themselves. Files placed by hand in the category
 folders (see [Model directories](#model-directories)) work the same way after a rescan.
@@ -305,8 +313,13 @@ use the model's defaults. **New** clears the prompt, the inputs, these overrides
 the preview.
 
 Models that make sound (they have an audio VAE) are saved as AVI with the soundtrack,
-because WebM output is silent. The server also saves a silent WebM preview for the
-browser; the saved AVI keeps the sound. Results with sound show a ♪ badge.
+because WebM output is silent. Browsers cannot play AVI, so the server also saves a
+silent WebM preview and the soundtrack as a WAV file. The viewer plays the WAV in step
+with the preview: click **♪ Sound off** on the video to turn the sound on (the choice is
+remembered). Results saved before this change only have the sound in the AVI. Gallery
+thumbnails with sound show a ♪ badge.
+Kandinsky 6 makes sound when its variant has the MMAudio audio VAE (the catalog packages
+download it; add it to older variants with **Edit**) and offers **Image → video**.
 
 The **Gallery** lists every saved result with search and Video/Image filters. Its
 prompt bar at the bottom starts a text-to-video or text-to-image job with the current
@@ -829,6 +842,10 @@ and optional SHA-256, and optionally:
 - `convert`: files fetched to a staging folder and packed into one GGUF. `types` lists the
   output types in order of preference with an optional `min_ram_gb`; the first type the
   machine has enough RAM for is used. `{type}` in `output` is replaced by that type.
+- `lora`: marks a LoRA download (shown in the LoRAs section, ready without setup):
+  `for` names the model, `models` lists the catalog ids it fits, `strength` is the default,
+  and `both`, `high` and `low` name the file for both experts or for the Wan 2.2 A14B
+  high-/low-noise expert.
 - `guide`: the setup guide used by **Set up** on the Models page. `inputs` maps input types
   (`diffusion_model`, `t5xxl`, `llm`, `clip_l`, `vae`, `tae`, ...) to files, `alternatives`
   lists optional swaps, `settings` holds the config defaults and rules (`defaults`,

@@ -536,14 +536,20 @@ bool execute_vid_gen_job(ServerRuntime& runtime,
 
     update_job_progress(job, "encoding", "video");
 #ifdef SD_USE_WEBM
-    // WebM output is silent, so a clip with sound is written as AVI (PCM audio) plus a silent
-    // WebM preview that browsers can play.
+    // Browsers play neither AVI nor PCM in WebM, so a clip with sound is written as AVI (PCM
+    // audio) plus a silent WebM preview and a WAV of the soundtrack that the Studio plays with it.
     if (generated_audio != nullptr && job.vid_gen.output_format != "webp") {
         job.vid_gen.output_format = "avi";
         std::vector<uint8_t> preview = create_video_from_sd_images_to_vector("webm", results.data(), num_results, output_fps,
                                                                            job.vid_gen.output_compression, nullptr, "");
         if (!preview.empty())
             job.result_preview_b64 = base64_encode(preview);
+        uint64_t samples = generated_audio->sample_count;
+        if (output_fps > 0)
+            samples = std::min<uint64_t>(samples, (static_cast<uint64_t>(num_results) * generated_audio->sample_rate + output_fps - 1) / output_fps);
+        std::vector<uint8_t> wav = encode_wav_to_vector(generated_audio->data, samples, generated_audio->channels, generated_audio->sample_rate);
+        if (!wav.empty())
+            job.result_audio_b64 = base64_encode(wav);
     }
 #endif
     std::vector<uint8_t> video_bytes = create_video_from_sd_images_to_vector(job.vid_gen.output_format,

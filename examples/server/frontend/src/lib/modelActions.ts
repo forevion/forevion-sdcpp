@@ -2,7 +2,9 @@ import { reactive } from "vue";
 
 import { api } from "./api";
 import { confirmDanger } from "./confirm";
-import { formatBytes, loadCatalog, loadDownloads, startPolling, state } from "./store";
+import { formatBytes, loadCatalog, loadDownloads, loadLoras, startPolling, state } from "./store";
+import type { LoraPick, LoraStage } from "./store";
+import { modelCards } from "./models";
 import type { ModelCard } from "./models";
 import type { DownloadPackage, Recipe } from "./types";
 
@@ -89,6 +91,30 @@ export async function deleteVariant(recipe: Recipe) {
 }
 
 // Opens Create with a ready variant of this model selected.
+// Opens Create with a downloaded LoRA added to a ready variant of a model it fits.
+export async function useLora(card: ModelCard): Promise<string> {
+    const lora = card.pkg?.lora;
+    if (!lora) return "";
+    await loadLoras();
+    const fits = modelCards.value.filter((c) => c.pkg && lora.models?.includes(c.pkg.id)).flatMap((c) => c.readyVariants);
+    const target = fits.find((r) => r.id === state.form.recipeId) || fits[0];
+    if (!target) return `Download and set up ${lora.for} first; this LoRA only works with it.`;
+    const picks: LoraPick[] = [];
+    for (const stage of ["both", "high", "low"] as const) {
+        const file = lora[stage];
+        if (!file) continue;
+        const name = file.split("/").pop() || file;
+        const installed = state.loras.find((l) => l.path === name || l.path.endsWith(`/${name}`) || l.name === name.replace(/\.safetensors$/, ""));
+        if (installed) picks.push({ path: installed.path, strength: lora.strength ?? 1, stage: stage as LoraStage });
+    }
+    if (!picks.length) return "The LoRA files were not found in the loras folder; try Rescan model folders in Settings.";
+    const existing = (state.form.loras[target.id] || []).filter((p) => !picks.some((n) => n.path === p.path));
+    state.form.loras = { ...state.form.loras, [target.id]: [...existing, ...picks] };
+    state.form.recipeId = target.id;
+    navigation.page = "create";
+    return "";
+}
+
 export function useModel(card: ModelCard, variant?: Recipe) {
     const chosen = variant || card.readyVariants[0];
     if (!chosen) return;

@@ -115,6 +115,12 @@ std::vector<uint8_t> create_video_from_sd_images_to_vector(const std::string& ou
                                                            const SDAudio* audio          = nullptr,
                                                            const std::string& parameters = "");
 
+/** Encodes interleaved float samples in [-1, 1] as a 16-bit PCM WAV file in memory. */
+std::vector<uint8_t> encode_wav_to_vector(const float* interleaved_samples,
+                                          uint64_t sample_count,
+                                          uint32_t channels,
+                                          uint32_t sample_rate);
+
 bool write_wav_to_file(const std::string& path,
                        const float* interleaved_samples,
                        uint64_t sample_count,

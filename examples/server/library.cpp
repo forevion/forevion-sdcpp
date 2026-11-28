@@ -284,6 +284,13 @@ void save_job_outputs(const ServerRuntime& runtime, const AsyncGenerationJob& jo
             }
             item["has_audio"] = true;
         }
+        if (!job.result_audio_b64.empty()) {
+            std::string audio;
+            if (decode_base64(job.result_audio_b64, audio) && write_file(dir / (base + "-audio.wav"), audio)) {
+                item["audio_file"] = base + "-audio.wav";
+                item["audio_url"]  = "/sdcpp/v1/outputs/files/" + base + "-audio.wav";
+            }
+        }
         if (job.vid_gen.still_frame >= 0) {
             item["rendered_frames"] = item.value("video_frames", json(nullptr));
             item["video_frames"]    = 1;
@@ -399,6 +406,7 @@ void register_library_endpoints(httplib::Server& svr, ServerRuntime& runtime) {
         const bool removed = fs::remove(dir / name, error);
         fs::remove(dir / (fs::path(name).stem().string() + ".json"), error);
         fs::remove(dir / (fs::path(name).stem().string() + "-preview.webm"), error);
+        fs::remove(dir / (fs::path(name).stem().string() + "-audio.wav"), error);
         res.status = removed ? 200 : 404;
         res.set_content(json({{"deleted", removed}}).dump(), "application/json");
     });
