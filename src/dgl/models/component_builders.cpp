@@ -17,6 +17,7 @@
 #include "model/vae/auto_encoder_kl.hpp"
 #include "model/vae/hunyuan_vae.hpp"
 #include "model/vae/hunyuan_video1_vae.hpp"
+#include "model/vae/kandinsky6_audio_vae.hpp"
 #include "model/vae/ltx_audio_vae.hpp"
 #include "model/vae/ltx_vae.hpp"
 #include "model/vae/mage_vae.hpp"
@@ -70,6 +71,13 @@ namespace sd::dgl::models::component_builders {
         std::shared_ptr<AudioVAERunner> audio;
         if (sd_version_is_minimax_h3(ctx.version)) {
             audio = std::make_shared<MiniMaxH3::AudioVAERunner>(backend, ctx.tensor_storage_map, "", ctx.weight_manager);
+        } else if (sd_version_is_kandinsky6(ctx.version)) {
+            try {
+                audio = std::make_shared<Kandinsky6Audio::AudioVAERunner>(backend, ctx.tensor_storage_map, "", ctx.weight_manager);
+            } catch (const std::exception& error) {
+                LOG_ERROR("%s", error.what());
+                return nullptr;
+            }
         } else {
             audio = std::make_shared<LTXV::LTXAudioVAERunner>(backend, ctx.tensor_storage_map, "", ctx.weight_manager);
         }

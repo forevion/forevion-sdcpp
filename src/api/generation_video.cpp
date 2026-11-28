@@ -105,8 +105,8 @@ namespace sd::api {
         const bool ltx       = sd_version_is_ltxav(version);
         const bool h3        = version == VERSION_MINIMAX_H3;
         const bool kandinsky = sd_version_is_kandinsky6(version);
-        if (kandinsky && (first || last))
-            throw dgl::Error(SD_STATUS_UNSUPPORTED, "Kandinsky 6 image-to-video is not supported yet");
+        if (kandinsky && last)
+            throw dgl::Error(SD_STATUS_UNSUPPORTED, "Kandinsky 6 supports a start image but not an end image");
         // Like Kandinsky6TI2VAPipeline, guided non-distilled runs fall back to the release's negative prompt.
         if (version == VERSION_KANDINSKY6_FLOW && request.image.sample_params.guidance.txt_cfg > 1.f &&
             request.values.value("negative_prompt", std::string()).empty())
@@ -119,7 +119,7 @@ namespace sd::api {
         if (s2v && last)
             throw dgl::Error(SD_STATUS_UNSUPPORTED, "Wan2.2 S2V does not support an end image");
         const bool image_condition = !vace && !s2v && request.context.model.wan_image_condition;
-        request.flags              = {{"first", first}, {"last", last}, {"conditioned", first || last}, {"vace", vace}, {"vace_reference", vace && first}, {"s2v_reference", s2v && first}, {"driving_audio", false}, {"image_condition", image_condition}, {"vision", image_condition && request.context.model.wan_vision_condition}, {"end_vision", request.context.model.wan_end_vision}, {"frozen", frozen}, {"hunyuan", sd_version_is_hunyuan_video(version) && (first || last)}, {"controls", false}, {"dual", false}, {"custom_sigmas", request.image.sample_params.custom_sigmas_count > 0}};
+        request.flags              = {{"first", first}, {"last", last}, {"conditioned", !kandinsky && (first || last)}, {"reference_tail", kandinsky && first}, {"vace", vace}, {"vace_reference", vace && first}, {"s2v_reference", s2v && first}, {"driving_audio", false}, {"image_condition", image_condition}, {"vision", image_condition && request.context.model.wan_vision_condition}, {"end_vision", request.context.model.wan_end_vision}, {"frozen", frozen}, {"hunyuan", sd_version_is_hunyuan_video(version) && (first || last)}, {"controls", false}, {"dual", false}, {"custom_sigmas", request.image.sample_params.custom_sigmas_count > 0}};
         request.fields["entry"]    = ltx || kandinsky ? "video_ltx" : h3 ? "video_h3"
                                                                          : "video_wan";
         if (image_condition || request.flags.at("hunyuan").get<bool>())
@@ -147,6 +147,18 @@ namespace sd::api {
                 throw dgl::Error(SD_STATUS_INVALID_ARGUMENT, "Wan image conditioning requires clip_vision_path");
             request.values["vision_path"]    = settings.clip_vision_path;
             request.fields["vision_options"] = arguments(loader_options(settings, SDBackendModule::TE, request.definition));
+        }
+        if (kandinsky) {
+            // TAEHV only approximates the VAE's latent space, so a configured HunyuanVideo VAE still
+            // encodes the start image when TAEHV decodes.
+            const bool tae_decodes       = request.fields.at("vae_loader") == "load_tae";
+            request.flags["encoder_vae"] = first && tae_decodes && !text(settings.vae_path).empty();
+            if (request.flags.at("encoder_vae").get<bool>()) {
+                request.values["encoder_vae_path"]    = settings.vae_path;
+                request.fields["encoder_vae_options"] = arguments(loader_options(settings, SDBackendModule::VAE, request.definition));
+            }
+            if (first)
+                predictor_option(request, ", ref_latents = [first_latent]");
         }
         if (ltx || h3 || kandinsky) {
             audiovisual(request);

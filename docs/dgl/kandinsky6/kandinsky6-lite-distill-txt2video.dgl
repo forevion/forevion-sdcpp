@@ -6,6 +6,7 @@ var {
     text_path = "../models/kandinsky-6.0-lite-distill/text_encoder"
     clip_l_path = "../models/kandinsky-6.0-lite-distill/text_encoder_2/model.safetensors"
     tae_path = "../models/vae/taehv.safetensors"
+    audio_vae_path = "../models/vae/kandinsky6-mmaudio-vae.safetensors"
 
     output_path = "output.avi"
 
@@ -24,12 +25,14 @@ fn main() {
     model = load_dit(model_path, family = "kandinsky6", params_backend = "cpu")
     text = load_text_encoder(text_path, family = "kandinsky6", params_backend = "cpu", clip_l_path = clip_l_path)
     tae = load_tae(tae_path, family = "kandinsky6", params_backend = "cpu")
+    audio_vae = load_audio_vae(audio_vae_path, family = "kandinsky6", params_backend = "cpu")
 
     # The model denoises video and its synchronized audio together. The audio latent
-    # ([length, 40]) rides in extra latent channels; this example decodes video only.
+    # ([length, 40]) rides in extra latent channels after the 16 video channels.
     video_base = tensor::zeros(latent_shape(tae, width = width, height = height, frames = frames))
     video_shape = tensor::shape(video_base)
-    audio_length = math::ceil(((video_shape[2] - 1) * 4 + 1) * 44100 / (fps * 1024))
+    audio_shape = audio_latent_shape(audio_vae, frames = frames, fps = fps)
+    audio_length = audio_shape[0]
     audio_count = audio_length * 40
     tail_channels = math::ceil_div(audio_count, video_shape[0] * video_shape[1] * video_shape[2])
     base = tensor::concat([video_base, tensor::zeros([video_shape[0], video_shape[1], video_shape[2], tail_channels, 1])], axis = 3)
@@ -43,6 +46,10 @@ fn main() {
 
     video_latent = latent[:, :, :, :video_shape[3]]
     output_frames = vae_decode(tae, dit_to_vae_latents(tae, video_latent))
-    video::save(output_path, {frames = output_frames, fps_num = fps, fps_den = 1})
-    return {video = {frames = output_frames, fps_num = fps, fps_den = 1}, latent = latent, audio = {}}
+    tail = latent[:, :, :, video_shape[3]:]
+    sound_latent = tensor::reshape(tensor::reshape(tail, [tensor::numel(tail)])[:audio_count], audio_shape)
+    sound = audio_vae_decode(audio_vae, sound_latent)
+    video = {frames = output_frames, fps_num = fps, fps_den = 1}
+    video::save(output_path, video, audio = sound, trim_audio = true)
+    return {video = video, latent = latent, audio = sound}
 }

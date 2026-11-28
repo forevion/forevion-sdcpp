@@ -1,16 +1,19 @@
 #ifndef __SD_MODEL_VAE_HUNYUAN_VIDEO1_VAE_HPP__
 #define __SD_MODEL_VAE_HUNYUAN_VIDEO1_VAE_HPP__
 
+#include <algorithm>
 #include <array>
+#include <cmath>
 #include <map>
 #include <memory>
 #include <string>
 #include <tuple>
 #include <vector>
 
+#include "core/rng_mt19937.hpp"
 #include "model/vae/hunyuan_vae.hpp"
 
-// Decoder of the original HunyuanVideo VAE (AutoencoderKLHunyuanVideo): 16 latent channels,
+// The original HunyuanVideo VAE (AutoencoderKLHunyuanVideo): 16 latent channels,
 // 8x spatial and 4x temporal compression. Used by Kandinsky 6. Unlike the HunyuanVideo 1.5
 // VAE it uses GroupNorm over (channels, frames, height, width), a frame-causal mid-block
 // attention, and nearest-neighbour upsampling followed by a causal convolution.
@@ -40,9 +43,10 @@ namespace HunyuanVideo1VAE {
         }
 
     public:
-        CausalConv3d(int64_t in_channels, int64_t out_channels, std::tuple<int, int, int> kernel_size)
+        CausalConv3d(int64_t in_channels, int64_t out_channels, std::tuple<int, int, int> kernel_size,
+                     std::tuple<int, int, int> stride = {1, 1, 1})
             : kernel_size(kernel_size) {
-            blocks["conv"] = std::make_shared<Conv3d>(in_channels, out_channels, kernel_size);
+            blocks["conv"] = std::make_shared<Conv3d>(in_channels, out_channels, kernel_size, stride);
         }
 
         // x: [W, H, T, C]
@@ -208,6 +212,67 @@ namespace HunyuanVideo1VAE {
         }
     };
 
+    class DownBlock : public UnaryBlock {
+        int num_layers;
+        bool downsample;
+
+    public:
+        DownBlock(int64_t in_channels, int64_t out_channels, int num_layers, std::tuple<int, int, int> stride)
+            : num_layers(num_layers), downsample(stride != std::tuple{1, 1, 1}) {
+            for (int i = 0; i < num_layers; ++i) {
+                blocks["resnets." + std::to_string(i)] = std::make_shared<ResnetBlock>(i == 0 ? in_channels : out_channels, out_channels);
+            }
+            if (downsample) {
+                blocks["downsamplers.0.conv"] = std::make_shared<CausalConv3d>(out_channels, out_channels, std::tuple{3, 3, 3}, stride);
+            }
+        }
+
+        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) override {
+            for (int i = 0; i < num_layers; ++i) {
+                x = std::dynamic_pointer_cast<ResnetBlock>(blocks["resnets." + std::to_string(i)])->forward(ctx, x);
+            }
+            if (downsample) {
+                x = std::dynamic_pointer_cast<CausalConv3d>(blocks["downsamplers.0.conv"])->forward(ctx, x);
+            }
+            return x;
+        }
+    };
+
+    class Encoder : public GGMLBlock {
+        std::vector<int64_t> channels{128, 256, 512, 512};
+
+    public:
+        Encoder(int64_t in_channels = 3, int64_t latent_channels = 16, int layers_per_block = 2) {
+            blocks["conv_in"] = std::make_shared<CausalConv3d>(in_channels, channels[0], std::tuple{3, 3, 3});
+            int64_t in        = channels[0];
+            for (int i = 0; i < 4; ++i) {
+                // Blocks 0-2 halve height and width, blocks 1-2 also halve time; block 3 keeps the size.
+                const int st = i == 1 || i == 2 ? 2 : 1;
+                const int sx = i < 3 ? 2 : 1;
+                blocks["down_blocks." + std::to_string(i)] = std::make_shared<DownBlock>(in, channels[i], layers_per_block, std::tuple{st, sx, sx});
+                in                                         = channels[i];
+            }
+            blocks["mid_block.resnets.0"]    = std::make_shared<ResnetBlock>(in, in);
+            blocks["mid_block.attentions.0"] = std::make_shared<MidAttention>(in);
+            blocks["mid_block.resnets.1"]    = std::make_shared<ResnetBlock>(in, in);
+            blocks["conv_norm_out"]          = std::make_shared<VideoGroupNorm>(in);
+            blocks["conv_out"]               = std::make_shared<CausalConv3d>(in, 2 * latent_channels, std::tuple{3, 3, 3});
+        }
+
+        ggml_tensor* forward(GGMLRunnerContext* ctx, ggml_tensor* x) {
+            auto block = [&](const std::string& name) { return std::dynamic_pointer_cast<UnaryBlock>(blocks[name]); };
+            auto h     = std::dynamic_pointer_cast<CausalConv3d>(blocks["conv_in"])->forward(ctx, x);
+            for (int i = 0; i < 4; ++i) {
+                h = block("down_blocks." + std::to_string(i))->forward(ctx, h);
+            }
+            h = block("mid_block.resnets.0")->forward(ctx, h);
+            h = block("mid_block.attentions.0")->forward(ctx, h);
+            h = block("mid_block.resnets.1")->forward(ctx, h);
+            h = ggml_silu(ctx->ggml_ctx, block("conv_norm_out")->forward(ctx, h));
+            return std::dynamic_pointer_cast<CausalConv3d>(blocks["conv_out"])->forward(ctx, h);
+        }
+    };
+
     class Decoder : public GGMLBlock {
         std::vector<int64_t> channels{512, 512, 256, 128};
 
@@ -243,6 +308,9 @@ namespace HunyuanVideo1VAE {
 
     class HunyuanVideo1VAERunner : public VAE {
     protected:
+        bool has_encoder;
+        Conv3d quant_conv;
+        Encoder encoder;
         Conv3d post_quant_conv;
         Decoder decoder;
 
@@ -253,7 +321,13 @@ namespace HunyuanVideo1VAE {
                                SDVersion version,
                                std::shared_ptr<RunnerWeightManager> weight_manager = nullptr)
             : VAE(version, backend, prefix, weight_manager),
+              has_encoder(tensor_storage_map.count(prefix + ".encoder.conv_in.conv.weight") > 0),
+              quant_conv(32, 32, std::tuple{1, 1, 1}),
               post_quant_conv(16, 16, std::tuple{1, 1, 1}) {
+            if (has_encoder) {
+                quant_conv.init(params_ctx, tensor_storage_map, prefix + ".quant_conv");
+                encoder.init(params_ctx, tensor_storage_map, prefix + ".encoder");
+            }
             post_quant_conv.init(params_ctx, tensor_storage_map, prefix + ".post_quant_conv");
             decoder.init(params_ctx, tensor_storage_map, prefix + ".decoder");
         }
@@ -279,6 +353,10 @@ namespace HunyuanVideo1VAE {
         }
 
         void get_param_tensors(std::map<std::string, ggml_tensor*>& tensors) override {
+            if (has_encoder) {
+                quant_conv.get_param_tensors(tensors, weight_prefix + ".quant_conv");
+                encoder.get_param_tensors(tensors, weight_prefix + ".encoder");
+            }
             post_quant_conv.get_param_tensors(tensors, weight_prefix + ".post_quant_conv");
             decoder.get_param_tensors(tensors, weight_prefix + ".decoder");
         }
@@ -288,12 +366,23 @@ namespace HunyuanVideo1VAE {
             return 32;
         }
 
+        // vae_output holds the posterior mean and log-variance (16 channels each).
         sd::Tensor<float> vae_output_to_latents(const sd::Tensor<float>& vae_output,
                                                 std::shared_ptr<RNG> rng,
-                                                VAEPosterior,
-                                                bool) override {
-            SD_UNUSED(rng);
-            return vae_output;
+                                                VAEPosterior posterior,
+                                                bool use_supplied_rng) override {
+            const size_t channel_axis = vae_output.dim() == 5 ? 3 : 2;
+            auto mean                 = sd::ops::slice(vae_output, channel_axis, 0, 16);
+            if (posterior == VAEPosterior::Mode) {
+                return mean;
+            }
+            auto logvar      = sd::ops::slice(vae_output, channel_axis, 16, 32);
+            const auto count = static_cast<uint32_t>(mean.numel());
+            auto noise       = use_supplied_rng ? rng->randn(count) : MT19937RNG(42).randn(count);
+            for (int64_t i = 0; i < mean.numel(); ++i) {
+                mean[i] += std::exp(0.5f * std::clamp(logvar[i], -30.f, 20.f)) * noise[i];
+            }
+            return mean;
         }
 
         sd::Tensor<float> diffusion_to_vae_latents(const sd::Tensor<float>& latents) override {
@@ -304,21 +393,25 @@ namespace HunyuanVideo1VAE {
             return latents * SCALING_FACTOR;
         }
 
-        ggml_cgraph* build_graph(const sd::Tensor<float>& input_tensor) {
+        ggml_cgraph* build_graph(const sd::Tensor<float>& input_tensor, bool decode_graph) {
             const size_t graph_size = std::max<size_t>(GRAPH_SIZE, GRAPH_SIZE_PER_LATENT_FRAME * static_cast<size_t>(input_tensor.shape()[2]));
             ggml_cgraph* gf         = new_graph_custom(graph_size);
-            ggml_tensor* z          = make_input(input_tensor);
+            ggml_tensor* x          = make_input(input_tensor);
             auto runner_ctx         = get_context();
-            z                       = post_quant_conv.forward(&runner_ctx, z);
-            ggml_build_forward_expand(gf, decoder.forward(&runner_ctx, z));
+            if (decode_graph) {
+                x = decoder.forward(&runner_ctx, post_quant_conv.forward(&runner_ctx, x));
+            } else {
+                x = quant_conv.forward(&runner_ctx, encoder.forward(&runner_ctx, x));
+            }
+            ggml_build_forward_expand(gf, x);
             return gf;
         }
 
         sd::Tensor<float> _compute(const int n_threads,
                                    const sd::Tensor<float>& input,
                                    bool decode_graph) override {
-            if (!decode_graph) {
-                LOG_ERROR("the HunyuanVideo VAE encoder is not supported");
+            if (!decode_graph && !has_encoder) {
+                LOG_ERROR("this HunyuanVideo VAE file has no encoder weights");
                 return {};
             }
             sd::Tensor<float> expanded;
@@ -326,7 +419,7 @@ namespace HunyuanVideo1VAE {
                 expanded = input.unsqueeze(2);
             }
             const auto& graph_input = expanded.empty() ? input : expanded;
-            auto get_graph          = [&]() -> ggml_cgraph* { return build_graph(graph_input); };
+            auto get_graph          = [&]() -> ggml_cgraph* { return build_graph(graph_input, decode_graph); };
             auto output             = restore_trailing_singleton_dims(GGMLRunner::compute(get_graph, n_threads, false), graph_input.dim());
             if (!output.empty() && input.dim() == 4) {
                 output.squeeze_(2);

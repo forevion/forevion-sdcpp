@@ -241,8 +241,9 @@ Choose **Latest (develop)** to get such edits before they are released.
 
 The built-in list has FastWan 2.2 5B, Wan 2.2 TI2V 5B, Wan 2.2 T2V / I2V A14B, Wan 2.2 S2V
 14B, Wan 2.1 T2V 1.3B / 14B, Wan 2.1 I2V 14B (480p and 720p), Wan 2.1 FLF2V 14B, Wan 2.1
-VACE 1.3B / 14B and Kandinsky 6.0 Lite. The 14B models use Q4_K_M files (about 10 GB each)
-so they fit in 32 GB of RAM; on a CPU they take tens of minutes for a short clip.
+VACE 1.3B / 14B and Kandinsky 6.0 Lite, Lite (non-distilled) and Pro distill. The 14B
+models use Q4_K_M files (about 10 GB each) so they fit in 32 GB of RAM; on a CPU they take
+tens of minutes for a short clip.
 
 **LoRAs** have their own section below the models: 27 open-licence (Apache-2.0 or CC0)
 LoRAs for Wan 2.2 A14B (LightX2V 4-step and 2-step speed-ups, camera moves, effects and
@@ -303,6 +304,8 @@ the preview.
 Models that make sound (they have an audio VAE) are saved as AVI with the soundtrack,
 because WebM output is silent. The server also saves a silent WebM preview for the
 browser; the saved AVI keeps the sound. Results with sound show a ♪ badge.
+Kandinsky 6 makes sound when its variant has the MMAudio audio VAE (the catalog packages
+download it; add it to older variants with **Edit**) and offers **Image → video**.
 
 The **Gallery** lists every saved result with search and Video/Image filters. Its
 prompt bar at the bottom starts a text-to-video or text-to-image job with the current

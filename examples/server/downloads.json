@@ -1009,7 +1009,7 @@
       "id": "kandinsky6-lite",
       "name": "Kandinsky 6.0 Lite",
       "group": "Kandinsky 6",
-      "description": "Distilled text-to-video, 10 steps. Includes the TAEHV tiny decoder (fast) and the HunyuanVideo VAE (sharp). The transformer is packed to Q8_0; the Qwen text encoder stays bf16 on machines with 48 GB RAM or more, otherwise it is packed to Q8_0.",
+      "description": "Distilled text-to-video, 10 steps. Makes sound and supports a start image. Includes the TAEHV tiny decoder (fast) and the HunyuanVideo VAE (sharp). The transformer is packed to Q8_0; the Qwen text encoder stays bf16 on machines with 48 GB RAM or more, otherwise it is packed to Q8_0.",
       "license": "MIT",
       "homepage": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers",
       "media": [
@@ -1028,6 +1028,12 @@
           "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
           "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
           "size": 985943868
+        },
+        {
+          "path": "vae/kandinsky6-mmaudio-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-distill-5s-Diffusers/resolve/main/audio_vae/diffusion_pytorch_model.safetensors",
+          "sha256": "dfccdf9d0d8d3de270a23b097400f21adb91f4ec683bdc26369cb65b08a5af87",
+          "size": 1711158920
         },
         {
           "path": "vae/taehv.safetensors",
@@ -1110,13 +1116,16 @@
           "Distilled Kandinsky 6.0 Lite: 10 steps, CFG 1, Euler sampler with the PiFlow scheduler.",
           "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
           "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Sound: the MMAudio audio VAE turns the audio the model generates with the video into a 44.1 kHz soundtrack. Leave it out for silent clips.",
+          "Image → video: the start image is encoded with the HunyuanVideo VAE when the config has one (even if TAEHV decodes), otherwise with TAEHV, which is close but less exact.",
           "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
         ],
         "inputs": {
           "diffusion_model": "{transformer}",
           "llm": "{qwen}",
           "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
-          "tae": "vae/taehv.safetensors"
+          "tae": "vae/taehv.safetensors",
+          "audio_vae": "vae/kandinsky6-mmaudio-vae.safetensors"
         },
         "settings": {
           "size_multiple": 16,
@@ -1136,6 +1145,9 @@
             "width": 864,
             "height": 480
           },
+          "features": [
+            "init_image"
+          ],
           "disabled_features": [
             "img2img",
             "mask_image"
@@ -1170,6 +1182,12 @@
           "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
           "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
           "size": 985943868
+        },
+        {
+          "path": "vae/kandinsky6-mmaudio-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Lite-5s-Diffusers/resolve/main/audio_vae/diffusion_pytorch_model.safetensors",
+          "sha256": "dfccdf9d0d8d3de270a23b097400f21adb91f4ec683bdc26369cb65b08a5af87",
+          "size": 1711158920
         },
         {
           "path": "vae/taehv.safetensors",
@@ -1253,13 +1271,16 @@
           "An empty negative prompt is replaced by the release's default negative prompt, as in the official pipeline.",
           "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
           "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Sound: the MMAudio audio VAE turns the audio the model generates with the video into a 44.1 kHz soundtrack. Leave it out for silent clips.",
+          "Image → video: the start image is encoded with the HunyuanVideo VAE when the config has one (even if TAEHV decodes), otherwise with TAEHV, which is close but less exact.",
           "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
         ],
         "inputs": {
           "diffusion_model": "{transformer}",
           "llm": "{qwen}",
           "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
-          "tae": "vae/taehv.safetensors"
+          "tae": "vae/taehv.safetensors",
+          "audio_vae": "vae/kandinsky6-mmaudio-vae.safetensors"
         },
         "settings": {
           "size_multiple": 16,
@@ -1279,6 +1300,9 @@
             "width": 864,
             "height": 480
           },
+          "features": [
+            "init_image"
+          ],
           "disabled_features": [
             "img2img",
             "mask_image"
@@ -1313,6 +1337,12 @@
           "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/vae/diffusion_pytorch_model.safetensors",
           "sha256": "7c68a6295f9034a88225fbafb1f3258291a08d57a1fdb938233fa57b1b8f4883",
           "size": 985943868
+        },
+        {
+          "path": "vae/kandinsky6-mmaudio-vae.safetensors",
+          "url": "https://huggingface.co/kandinskylab/Kandinsky-6.0-Pro-distill-5s-Diffusers/resolve/main/audio_vae/diffusion_pytorch_model.safetensors",
+          "sha256": "dfccdf9d0d8d3de270a23b097400f21adb91f4ec683bdc26369cb65b08a5af87",
+          "size": 1711158920
         },
         {
           "path": "vae/taehv.safetensors",
@@ -1400,13 +1430,16 @@
           "Q8_0 is within 1% of the bf16 model; Q4_K, used below 48 GB RAM, differs by about 5% but fits in RAM with room for the rest of the pipeline.",
           "Needs both text encoders: the Qwen 2.5 VL 7B encoder and CLIP-L.",
           "Decoder: TAEHV decodes in seconds; the HunyuanVideo VAE is sharper but takes much longer. Pick one (TAEHV wins when both are set).",
+          "Sound: the MMAudio audio VAE turns the audio the model generates with the video into a 44.1 kHz soundtrack. Leave it out for silent clips.",
+          "Image → video: the start image is encoded with the HunyuanVideo VAE when the config has one (even if TAEHV decodes), otherwise with TAEHV, which is close but less exact.",
           "Single frames are noisy with this model, so Image mode renders 5 frames and keeps the middle one."
         ],
         "inputs": {
           "diffusion_model": "{transformer}",
           "llm": "{qwen}",
           "clip_l": "text_encoders/kandinsky6-clip-l.safetensors",
-          "tae": "vae/taehv.safetensors"
+          "tae": "vae/taehv.safetensors",
+          "audio_vae": "vae/kandinsky6-mmaudio-vae.safetensors"
         },
         "settings": {
           "size_multiple": 16,
@@ -1426,6 +1459,9 @@
             "width": 864,
             "height": 480
           },
+          "features": [
+            "init_image"
+          ],
           "disabled_features": [
             "img2img",
             "mask_image"
