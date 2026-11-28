@@ -80,26 +80,25 @@ The prompt is ignored. The built-in `kandinsky6-vsr` recipe has the `diffusion_m
 - Frame counts are `4n+1`; extra trailing frames are dropped.
 - At 2x the clip must cover one input tile: 256x256, 384x256 or 256x384 pixels. At 4x it must cover
   128x128, 192x128 or 128x192.
-- The K-VAE decodes one latent frame per graph and carries the causal padding between graphs. This
-  is exact and bounds memory to four output frames per tile.
+- The K-VAE decodes each latent frame up to its last temporal upsample in one graph, then the two
+  full-resolution levels one output frame per graph, carrying the causal padding between graphs.
+  This is exact and bounds memory to one full-resolution frame per tile.
 - The encoder returns the posterior mean, so `posterior = "sample"` also gives the mean.
 
 ## Speed and memory
 
-Measured on a 16-core Ryzen 9 9950X without a GPU, 2x, a 448x256 clip with 9 frames (two
-512x768 output tiles), bf16 transformer, f16 GGUF K-VAE, `scale=2` upscaler:
+Measured with `sd-cli -M dgl` on a 16-core Ryzen 9 9950X without a GPU: 2x, a 448x256 clip with
+9 frames (two 512x768 output tiles), bf16 transformer, f16 GGUF K-VAE, `scale=2` upscaler:
 
 | Stage | Time |
 | --- | --- |
 | K-VAE encode | 5.5 s |
 | Upscale and 2 PiFlow steps, per tile | about 21 s |
-| K-VAE decode, both tiles | 663 s |
-| Total through sd-server | 12 min 12 s, peak 13.5 GB RAM |
+| K-VAE decode, per tile | about 140 s |
+| Total | 335 s, peak 15.2 GB RAM |
 
-On that machine, with about 13 GB of commit free, a full 512x768 decode graph did not fit. The
-VAE decode then retries with spatial tiling on its own (`Reducing VAE decode tiles`), which is
-slower and not bit-exact at the seams. A 512x512 tile with two latent frames decodes in about
-16 s when it fits. Machines with more free memory skip the fallback.
+The decoder's largest graph holds one full-resolution frame of one tile, so memory does not grow
+with the clip length.
 
 ## Accuracy
 
@@ -113,7 +112,7 @@ at 2x, feeding every stage the reference output of the previous one:
 | 4x latent upscaler (8x8 latent crop) | 0.03% |
 | Transformer, first PiFlow step | 0.06% |
 | After both PiFlow steps | 0.16% |
-| K-VAE decode | 0.14% |
+| K-VAE decode | 0.03% |
 
 The f16 GGUF K-VAE gives the same figures (0.14% encode, 0.04% decode on a reconstruction).
 

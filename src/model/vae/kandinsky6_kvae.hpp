@@ -10,19 +10,21 @@
 // 64 latent channels, 16x spatial and 4x temporal compression, RMS-normalized causal resnets, and a
 // decoder whose norms are modulated by the latent (SpatialNorm). Tensors are [W, H, T, C].
 //
-// The decoder runs one latent frame per graph and carries every causal convolution's padding in
-// the runner's cache tensors, which reproduces a single pass exactly (the diffusers segmentation
-// relies on the same property) while bounding memory to a few output frames.
+// The decoder runs one latent frame per graph up to the last temporal upsample, then the
+// full-resolution levels one output frame per graph. Every causal convolution carries its padding
+// in the runner's cache tensors, which reproduces a single pass exactly (the diffusers segmentation
+// relies on the same property) while bounding memory to one full-resolution frame.
 namespace Kandinsky6KVAE {
     constexpr float SCALING_FACTOR = 0.910344004631042f;
 
     // Per-graph causal state. In streaming mode every causal convolution reads the frames the
-    // previous segment left in cache slot "kvae.<n>" and stores the frames the next one needs.
+    // previous segment left in cache slot "<prefix><n>" and stores the frames the next one needs.
     struct Causal {
         GGMLRunnerContext* ctx = nullptr;
         bool streaming         = false;
         bool first             = true;
         int index              = 0;
+        std::string prefix     = "kvae.";
     };
 
     // Conv3d with causal time padding: the first segment repeats its first frame, later ones use
@@ -44,7 +46,7 @@ namespace Kandinsky6KVAE {
         ggml_tensor* forward(Causal& state, ggml_tensor* x) {
             auto c = state.ctx->ggml_ctx;
             if (time_pad > 0) {
-                const std::string name = "kvae." + std::to_string(state.index++);
+                const std::string name = state.prefix + std::to_string(state.index++);
                 ggml_tensor* head      = state.first ? nullptr : state.ctx->load_cache_tensor(name);
                 if (head == nullptr) {
                     auto first = ggml_ext_slice(state.ctx, x, 2, 0, 1);
@@ -325,16 +327,37 @@ namespace Kandinsky6KVAE {
             return ggml_ext_slice(ctx, x, 3, 0, config.latent_channels);
         }
 
-        // z [w, h, t, 64] (one segment) -> pixels in [-1, 1]
-        ggml_tensor* decode(GGMLRunnerContext* ctx, ggml_tensor* z, bool first) {
-            Causal state{ctx, true, first, 0};
+        // Levels below this one run at the full frame rate: all temporal upsampling happens above it.
+        int full_rate_level() const {
+            return int(config.decoder_channels.size()) - (config.time_start_level + config.time_levels);
+        }
+
+        // z [w, h, 1, 64] (one latent frame) -> features entering the first full-rate level.
+        ggml_tensor* decode_head(GGMLRunnerContext* ctx, ggml_tensor* z, bool first) {
+            Causal state{ctx, true, first, 0, "kvae.head."};
             const int levels = int(config.decoder_channels.size());
             auto x           = get<CausalConv>("decoder.conv_in")->forward(state, z);
             auto cut         = [&](const std::string& name) { sd::ggml_graph_cut::mark_graph_cut(x, "kvae.decoder." + name, "h"); };
             x                = get<ResnetBlock>("decoder.mid.block_1")->forward(state, x, z);
             x                = get<ResnetBlock>("decoder.mid.block_2")->forward(state, x, z);
             cut("mid");
-            for (int level = levels - 1; level >= 0; --level) {
+            for (int level = levels - 1; level >= full_rate_level(); --level) {
+                const std::string stage = "decoder.up." + std::to_string(level) + ".";
+                for (int i = 0; i < config.layers + 1; ++i) {
+                    x = get<ResnetBlock>(stage + "block." + std::to_string(i))->forward(state, x, z);
+                    cut(stage + "block." + std::to_string(i));
+                }
+                x = get<Upsample>(stage + "upsample")->forward(state, x);
+                cut(stage + "upsample");
+            }
+            return x;
+        }
+
+        // One frame of decode_head's output -> one pixel frame in [-1, 1]; z is its latent frame.
+        ggml_tensor* decode_tail(GGMLRunnerContext* ctx, ggml_tensor* x, ggml_tensor* z, bool first) {
+            Causal state{ctx, true, first, 0, "kvae.tail."};
+            auto cut = [&](const std::string& name) { sd::ggml_graph_cut::mark_graph_cut(x, "kvae.decoder." + name, "h"); };
+            for (int level = full_rate_level() - 1; level >= 0; --level) {
                 const std::string stage = "decoder.up." + std::to_string(level) + ".";
                 for (int i = 0; i < config.layers + 1; ++i) {
                     x = get<ResnetBlock>(stage + "block." + std::to_string(i))->forward(state, x, z);
@@ -391,6 +414,7 @@ namespace Kandinsky6KVAE {
 
         sd::Tensor<float> decode_volume(int n_threads, const sd::Tensor<float>& latent) {
             const int64_t w = latent.shape()[0], h = latent.shape()[1], t = latent.shape()[2], ch = latent.shape()[3];
+            const int64_t plane = w * 16 * h * 16;
             free_cache_ctx_and_buffer();
             sd::Tensor<float> output({w * 16, h * 16, (t - 1) * 4 + 1, 3});
             int64_t written = 0;
@@ -398,22 +422,37 @@ namespace Kandinsky6KVAE {
                 sd::Tensor<float> segment({w, h, 1, ch});
                 for (int64_t c = 0; c < ch; ++c)
                     std::copy_n(latent.data() + (c * t + i) * w * h, w * h, segment.data() + c * w * h);
-                auto graph = [&]() {
+                auto head_graph = [&]() {
                     auto gf  = new_graph_custom(MAX_GRAPH_SIZE * 4);
                     auto ctx = get_context(gf);
-                    ggml_build_forward_expand(gf, model.decode(&ctx, make_input(segment), i == 0));
+                    ggml_build_forward_expand(gf, model.decode_head(&ctx, make_input(segment), i == 0));
                     return gf;
                 };
-                auto frames = restore_trailing_singleton_dims(GGMLRunner::compute(graph, n_threads, false), 4);
-                if (frames.empty()) {
+                auto features = restore_trailing_singleton_dims(GGMLRunner::compute(head_graph, n_threads, false), 4);
+                if (features.empty()) {
                     free_cache_ctx_and_buffer();
                     return {};
                 }
-                const int64_t n = frames.shape()[2], plane = w * 16 * h * 16;
-                for (int64_t c = 0; c < 3; ++c)
-                    for (int64_t f = 0; f < n; ++f)
-                        std::copy_n(frames.data() + (c * n + f) * plane, plane, output.data() + (c * output.shape()[2] + written + f) * plane);
-                written += n;
+                const int64_t fw = features.shape()[0], fh = features.shape()[1], n = features.shape()[2], fc = features.shape()[3];
+                for (int64_t f = 0; f < n; ++f) {
+                    sd::Tensor<float> frame({fw, fh, 1, fc});
+                    for (int64_t c = 0; c < fc; ++c)
+                        std::copy_n(features.data() + (c * n + f) * fw * fh, fw * fh, frame.data() + c * fw * fh);
+                    auto tail_graph = [&]() {
+                        auto gf  = new_graph_custom(MAX_GRAPH_SIZE * 4);
+                        auto ctx = get_context(gf);
+                        ggml_build_forward_expand(gf, model.decode_tail(&ctx, make_input(frame), make_input(segment), i == 0 && f == 0));
+                        return gf;
+                    };
+                    auto pixels = restore_trailing_singleton_dims(GGMLRunner::compute(tail_graph, n_threads, false), 4);
+                    if (pixels.empty()) {
+                        free_cache_ctx_and_buffer();
+                        return {};
+                    }
+                    for (int64_t c = 0; c < 3; ++c)
+                        std::copy_n(pixels.data() + c * plane, plane, output.data() + (c * output.shape()[2] + written) * plane);
+                    ++written;
+                }
             }
             free_cache_ctx_and_buffer();
             return (output + 1.f) * (128.f / 127.5f) - 1.f;
