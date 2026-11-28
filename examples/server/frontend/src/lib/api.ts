@@ -15,6 +15,7 @@ import type {
     Recipe,
     FolderListing,
     FolderSettings,
+    SystemInfo,
 } from "./types";
 
 async function fetchJson<T>(url: string, init?: RequestInit): Promise<T> {
@@ -54,6 +55,7 @@ export const api = {
     deletePackageFiles: (id: string) => fetchJson<{ deleted: string[] }>(`/sdcpp/v1/downloads/${id}/files`, { method: "DELETE" }),
     packageDefinition: (id: string) => fetchJson<PackageDefinition>(`/sdcpp/v1/downloads/${id}/definition`, { cache: "no-store" }),
     savePackage: (pkg: Record<string, unknown>) => fetchJson<unknown>(`/sdcpp/v1/downloads/${pkg.id}`, { ...post(pkg), method: "PUT" }),
+    system: () => fetchJson<SystemInfo>("/sdcpp/v1/system", { cache: "no-store" }),
     folders: () => fetchJson<FolderSettings>("/sdcpp/v1/settings/folders", { cache: "no-store" }),
     saveFolders: (folders: { models: string; inputs: string; outputs: string }) =>
         fetchJson<{ saved: boolean }>("/sdcpp/v1/settings/folders", { ...post(folders), method: "PUT" }),

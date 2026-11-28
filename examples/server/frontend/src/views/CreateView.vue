@@ -247,6 +247,10 @@ function resetAdvanced() {
                 <button class="btn-secondary new-btn" type="button" title="Clear the prompt and preview" @click="newCreation"><Icon name="create" :size="16" />New</button>
             </header>
 
+            <p v-if="state.system?.gpu_build && !state.system.gpu_found" class="status-message status-message--error">
+                This is a {{ state.system.gpu_build.toUpperCase() }} build, but no GPU was found, so jobs run on the CPU and are much slower. Check that the
+                NVIDIA driver works (<code>nvidia-smi</code>), then restart the server.
+            </p>
             <p v-if="state.loading.catalog" class="loading-row"><span class="spin" />Loading models…</p>
             <div v-else-if="!state.files.length" class="panel no-models">
                 <Icon name="models" :size="28" />

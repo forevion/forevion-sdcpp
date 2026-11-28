@@ -720,8 +720,10 @@ private:
                     packages.push_back(std::move(item));
             }
         };
-        for (const char* builtin : k_builtin_downloads)
-            add(json::parse(builtin), "builtin");
+        std::string builtin;
+        for (const char* piece : k_builtin_downloads)
+            builtin += piece;
+        add(json::parse(builtin), "builtin");
         // Online entries replace built-in ones with the same id; user files replace both.
         if (fs::is_regular_file(online_cache_path()))
             add(json::parse(read_text_file(online_cache_path()), nullptr, false), "online");

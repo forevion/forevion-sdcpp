@@ -26,14 +26,19 @@ server-local defaults.
 
 Running the **Studio release** workflow by hand (Actions tab, pick `master`) publishes a
 `studio-<date>-<commit>` release on the
-[releases page](https://github.com/forevion/forevion-sdcpp/releases) with CPU builds that
-include the Web UI. One package runs on any x86-64 CPU and picks the fastest code path
-(AVX2, AVX-512, ...) when it starts:
+[releases page](https://github.com/forevion/forevion-sdcpp/releases) with builds that
+include the Web UI. Each package runs on any x86-64 CPU and picks the fastest code path
+(AVX2, AVX-512, ...) when it starts; the CUDA package also uses an NVIDIA GPU:
 
 | Package | Runs on | Start |
 | --- | --- | --- |
 | `sdcpp-studio-windows-x64.zip` | Windows 10/11 | Unzip, double-click `start-studio.bat` |
 | `sdcpp-studio-linux-x64.tar.gz` | glibc 2.35+ (Ubuntu 22.04+, Zorin OS 17+, Debian 12+) | `./setup-sdcpp.sh` (also inside the archive) |
+| `sdcpp-studio-linux-x64-cuda.tar.gz` | The same Linux systems with an NVIDIA GPU from Turing (T4, RTX 20) to Blackwell (RTX 50, RTX PRO 6000) and NVIDIA driver 575+ | `./setup-sdcpp.sh` picks it when `nvidia-smi` finds a GPU |
+
+The CUDA package bundles the CUDA 12.8 runtime and cuBLAS, so only the NVIDIA driver is
+needed. A workflow run with **Publish** turned off only builds the packages and keeps
+them as workflow artifacts.
 
 `SHA256SUMS.txt` in each release lists the checksums.
 
@@ -64,18 +69,68 @@ flowchart TD
     D -- no --> F["Start sd-server<br/>browser opens when ready"]
 ```
 
-Everything stays in that folder:
+The installed release (`sd-server`, `sd-cli`, libraries) goes to `app/` next to the
+script, and `studio-settings.json` there remembers the models, inputs and outputs folders
+you choose in the browser on the first start.
 
-| Folder | Contents |
-| --- | --- |
-| `app/` | The installed release (`sd-server`, `sd-cli`, libraries) |
-| `models/` | Models downloaded from the Models page |
-| `outputs/` | Saved images and videos |
+**NVIDIA GPU.** `--gpu auto` (the default) uses CUDA when `nvidia-smi` finds an NVIDIA
+GPU: it installs the CUDA package instead of the CPU one and starts the server with
+automatic placement, so weights go to the GPU's memory first and spill into RAM when they
+do not fit. `--gpu cpu` forces the CPU build and `--gpu cuda` insists on the GPU. With
+`--from-source`, a CUDA build needs the CUDA toolkit 12.x (`nvcc`) and compiles for the
+installed GPU only, which takes 15-40 minutes the first time.
 
 Options: `--update` installs the latest release, `--setup-only` installs without
 starting, `--port N` changes the port, `--lan` lets other devices on the network connect,
-`--threads N` overrides the thread count and `--no-browser` skips opening the browser.
-Run with `--help` for the full list.
+`--threads N` overrides the thread count, `--gpu auto|cuda|cpu` chooses the build and
+`--no-browser` skips opening the browser. Run with `--help` for the full list.
+
+**On a rented cloud GPU.** Pick a Linux (Ubuntu 22.04 or newer) machine with an NVIDIA
+GPU and its driver; most GPU images already have it (`nvidia-smi` shows the GPU). Run the
+script there with `--no-browser`, then reach the Web UI through an SSH tunnel from your own
+computer, so the server is never exposed to the internet:
+
+```sh
+ssh -L 1234:127.0.0.1:1234 user@gpu-machine
+```
+
+Then open <http://127.0.0.1:1234> on your computer. The badge at the bottom of the
+sidebar shows **GPU** (green) when the model runs on the GPU, **GPU** in amber when part
+of it had to stay in RAM, and **CPU** otherwise; hover it for the devices and their
+memory. A CUDA build that finds no GPU shows **No GPU** and a warning on Create. The Queue
+and the Gallery show which device each job ran on. Through the tunnel the folder
+browser shows the cloud machine's folders. Rough GPU memory needs: Wan 5B and the 14B
+Q4_K_M models fit in 24 GB; Wan 2.2 A14B (two experts) and Kandinsky 6 Pro work best with
+48 GB or more. Do not use `--lan` on a public machine: the server has no login.
+
+Cloud GPU containers (RunPod, Vast.ai, ...) usually log you in as `root` without `sudo`;
+the script then installs missing packages with `apt-get` directly.
+
+**RunPod, step by step.** Only the volume survives when a pod is removed, so keep
+everything on it:
+
+1. Create a **network volume** (150 GB is enough for several models; billed per GB-month
+   whether or not a pod runs) in the region where you want GPUs.
+2. Deploy a pod on it with an Ubuntu 22.04+ image that has CUDA 12.8 or newer (for example
+   RunPod's PyTorch template), the volume mounted at `/workspace`, and **SSH over exposed
+   TCP** turned on (the simpler proxied SSH cannot forward ports).
+3. In the pod's terminal:
+
+   ```sh
+   mkdir -p /workspace/sdcpp && cd /workspace/sdcpp
+   curl -fLO https://raw.githubusercontent.com/forevion/forevion-sdcpp/develop/scripts/setup-sdcpp.sh
+   chmod +x setup-sdcpp.sh
+   ./setup-sdcpp.sh --no-browser
+   ```
+
+4. On your computer, open the tunnel with the SSH command RunPod shows for the exposed TCP
+   port, adding `-L 1234:127.0.0.1:1234`, and open <http://127.0.0.1:1234>.
+5. On the first start choose `/workspace/models`, `/workspace/inputs` and
+   `/workspace/outputs` as the folders.
+
+Next time, deploy a pod on the same volume and run `/workspace/sdcpp/setup-sdcpp.sh
+--no-browser` again: the app, the folders setting and the models are already there.
+Terminate the pod when you are done; a stopped pod keeps charging for its own disk.
 
 **Building from source.** `--from-source` clones the `develop` branch into
 `stable-diffusion.cpp/` and builds it for this exact CPU instead: it installs Git, CMake,
